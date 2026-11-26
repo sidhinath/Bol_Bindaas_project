@@ -1,4 +1,4 @@
-"""BolBindaas — static file server + one AI proxy route.
+"""BolBindaas — static file server + one Gemini proxy route.
 
 Uses only the Python standard library, so there are no packages to install.
 The frontend calls POST /api/convert; this file is the only place that reads
@@ -15,6 +15,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 MAX_CHARS = 4000
 
+# Gemini REST endpoint: POST /v1beta/models/{model}:generateContent
+DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
+DEFAULT_MODEL = "gemini-2.5-flash"
+
 # System prompt is kept server-side and sent verbatim with every request.
 SYSTEM_PROMPT = (
     "You are a Hinglish-to-English writer. The user will give text in Hinglish "
@@ -27,8 +31,8 @@ SYSTEM_PROMPT = (
 ALLOWED_TONES = {"normal", "formal", "casual", "poetic"}
 CONFIG = {
     "key": "",
-    "base_url": "https://api.openai.com/v1",
-    "model": "gpt-4o-mini",
+    "base_url": DEFAULT_BASE_URL,
+    "model": DEFAULT_MODEL,
 }
 
 
@@ -59,32 +63,57 @@ def load_env() -> None:
             os.environ[key] = value
 
 
+def configure() -> None:
+    """Load AI settings, tolerating leftover OpenAI values from older deploys."""
+    load_env()
+
+    key = (
+        os.getenv("AI_API_KEY")
+        or os.getenv("GEMINI_API_KEY")
+        or os.getenv("GOOGLE_API_KEY")
+        or ""
+    )
+    CONFIG["key"] = key.strip()
+
+    base_url = os.getenv("AI_BASE_URL", DEFAULT_BASE_URL).strip()
+    if "openai" in base_url.lower():
+        print("Ignoring old OpenAI AI_BASE_URL; using the Gemini endpoint.")
+        base_url = DEFAULT_BASE_URL
+    CONFIG["base_url"] = base_url or DEFAULT_BASE_URL
+
+    model = os.getenv("AI_MODEL", DEFAULT_MODEL).strip()
+    if model.lower().startswith(("gpt-", "o1", "o3", "o4")):
+        print(f"Ignoring old OpenAI AI_MODEL={model!r}; using {DEFAULT_MODEL}.")
+        model = DEFAULT_MODEL
+    CONFIG["model"] = model or DEFAULT_MODEL
+
+
 def call_ai(text: str, tone: str) -> str:
-    """Send the text to an OpenAI-compatible chat endpoint and return English."""
+    """Send the text to Gemini generateContent and return English."""
     if not CONFIG["key"]:
         raise ApiError(
             503,
-            "AI API key is not configured. Add AI_API_KEY to .env and restart the server.",
+            "Gemini API key is not configured. Add AI_API_KEY to .env and restart "
+            "the server (or set it in the hosting platform).",
         )
 
     # The tone is an instruction layered on top of the fixed system prompt.
     user_content = text if tone == "normal" else f"Tone: {tone}\n\nText: {text}"
     payload = {
-        "model": CONFIG["model"],
-        "messages": [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": user_content},
-        ],
-        "temperature": 0.4,
-        "max_tokens": 1200,
+        "system_instruction": {"parts": [{"text": SYSTEM_PROMPT}]},
+        "contents": [{"role": "user", "parts": [{"text": user_content}]}],
+        "generationConfig": {"maxOutputTokens": 1200},
     }
 
+    endpoint = (
+        f"{CONFIG['base_url'].rstrip('/')}/models/{CONFIG['model']}:generateContent"
+    )
     request = urllib.request.Request(
-        CONFIG["base_url"].rstrip("/") + "/chat/completions",
+        endpoint,
         data=json.dumps(payload).encode("utf-8"),
         headers={
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {CONFIG['key']}",
+            "x-goog-api-key": CONFIG["key"],
         },
         method="POST",
     )
@@ -93,29 +122,43 @@ def call_ai(text: str, tone: str) -> str:
         with urllib.request.urlopen(request, timeout=30) as response:
             data = json.loads(response.read().decode("utf-8"))
     except urllib.error.HTTPError as error:
-        detail = error.read().decode("utf-8", errors="replace")[:200]
-        raise ApiError(502, f"AI provider returned {error.code}. {detail}") from error
+        body = error.read().decode("utf-8", errors="replace")
+        detail = body
+        try:
+            parsed = json.loads(body)
+            detail = parsed.get("error", {}).get("message") or body
+        except (json.JSONDecodeError, AttributeError):
+            pass
+        detail = detail[:200]
+        if error.code in (400, 401, 403):
+            raise ApiError(
+                502,
+                "Gemini rejected the request. Check that AI_API_KEY is a valid "
+                f"Gemini API key and AI_MODEL is a Gemini model. Details: {detail}",
+            ) from error
+        raise ApiError(502, f"Gemini returned {error.code}. {detail}") from error
     except urllib.error.URLError as error:
-        raise ApiError(504, f"Could not reach the AI provider: {error.reason}") from error
+        raise ApiError(504, f"Could not reach Gemini: {error.reason}") from error
     except TimeoutError as error:
-        raise ApiError(504, "The AI provider took too long. Please try again.") from error
+        raise ApiError(504, "Gemini took too long. Please try again.") from error
     except json.JSONDecodeError as error:
-        raise ApiError(502, "AI provider returned invalid JSON.") from error
+        raise ApiError(502, "Gemini returned invalid JSON.") from error
 
     try:
-        choices = data.get("choices") or []
-        content = choices[0].get("message", {}).get("content", "")
-    except (IndexError, AttributeError, TypeError) as error:
-        raise ApiError(502, "Unexpected response shape from the AI provider.") from error
-
-    # Some providers return content as a list of {type, text} parts.
-    if isinstance(content, list):
+        candidates = data.get("candidates") or []
+        parts = candidates[0].get("content", {}).get("parts") or []
         content = "".join(
-            part.get("text", "") for part in content if isinstance(part, dict)
+            part.get("text", "") for part in parts if isinstance(part, dict)
         )
+    except (IndexError, AttributeError, TypeError) as error:
+        raise ApiError(502, "Unexpected response shape from Gemini.") from error
 
-    if not isinstance(content, str) or not content.strip():
-        raise ApiError(502, "The AI provider returned an empty result.")
+    if not content.strip():
+        feedback = data.get("promptFeedback") or {}
+        reason = feedback.get("blockReason")
+        if reason:
+            raise ApiError(502, f"Gemini blocked the prompt ({reason}). Please rephrase it.")
+        raise ApiError(502, "Gemini returned an empty result.")
 
     return content.strip()
 
@@ -129,7 +172,15 @@ class AppHandler(SimpleHTTPRequestHandler):
     def do_GET(self):
         path = self.path.split("?", 1)[0]
         if path == "/api/health":
-            self.send_json(200, {"status": "ok", "configured": bool(CONFIG["key"])})
+            self.send_json(
+                200,
+                {
+                    "status": "ok",
+                    "configured": bool(CONFIG["key"]),
+                    "provider": "gemini",
+                    "model": CONFIG["model"],
+                },
+            )
             return
         super().do_GET()
 
@@ -193,16 +244,14 @@ class AppHandler(SimpleHTTPRequestHandler):
 
 
 def main() -> None:
-    load_env()
-    CONFIG["key"] = os.getenv("AI_API_KEY", "").strip()
-    CONFIG["base_url"] = os.getenv("AI_BASE_URL", CONFIG["base_url"]).strip()
-    CONFIG["model"] = os.getenv("AI_MODEL", CONFIG["model"]).strip()
+    configure()
 
     host = os.getenv("HOST", "127.0.0.1")
     port = int(os.getenv("PORT", "5500"))
 
     print(f"Serving {ROOT} at http://{host}:{port}")
-    print("AI key loaded." if CONFIG["key"] else "AI key missing — set AI_API_KEY in .env")
+    print(f"AI provider: Gemini ({CONFIG['model']})")
+    print("Gemini key loaded." if CONFIG["key"] else "Gemini key missing — set AI_API_KEY in .env")
     ThreadingHTTPServer((host, port), AppHandler).serve_forever()
 
 
