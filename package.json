@@ -9,10 +9,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/sidhinath/BolBindaas.git"
+    "url": "git+https://github.com/sidhinath/Bol_Bindaas_project.git"
   },
-  "homepage": "https://github.com/sidhinath/BolBindaas#readme",
+  "homepage": "https://github.com/sidhinath/Bol_Bindaas_project#readme",
   "bugs": {
-    "url": "https://github.com/sidhinath/BolBindaas/issues"
+    "url": "https://github.com/sidhinath/Bol_Bindaas_project/issues"
   }
 }

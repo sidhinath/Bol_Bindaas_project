@@ -70,7 +70,7 @@ BolBindaas/
 ## Installation and setup
 
 ```bash
-git clone https://github.com/sidhinath/BolBindaas.git
+git clone https://github.com/sidhinath/Bol_Bindaas_project.git
 cd BolBindaas
 ```
 
@@ -130,7 +130,7 @@ This app is deployed as a **Python web service** (Render is the recommended plat
 
 ### Deploy on Render
 
-1. Push the code to **https://github.com/sidhinath/BolBindaas** without committing `.env`.
+1. Push the code to **https://github.com/sidhinath/Bol_Bindaas_project** without committing `.env`.
 2. In Render, create a **New Web Service** and connect that repository.
 3. Set:
    - **Runtime:** Python
