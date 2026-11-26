@@ -34,7 +34,7 @@ BolBindaas converts Hinglish (Hindi in Roman English) into clean, natural Englis
 | Frontend | HTML5, CSS3, vanilla JavaScript |
 | Browser APIs | Web Speech API, SpeechSynthesis, Clipboard API, localStorage |
 | Backend | Python 3 standard library (`http.server`, `urllib.request`) |
-| AI | Gemini API (`generateContent`, default model `gemini-2.5-flash`) |
+| AI | Gemini API (`generateContent`, default model `gemini-3.8-flash`) |
 | Dependencies | None |
 
 ## Project structure
@@ -77,7 +77,7 @@ Add your key to `.env`:
 
 ```env
 AI_API_KEY=AIza-your-gemini-key-here
-AI_MODEL=gemini-2.5-flash
+AI_MODEL=gemini-3.8-flash
 # AI_BASE_URL=https://generativelanguage.googleapis.com/v1beta  # optional override
 ```
 
@@ -103,7 +103,7 @@ Deploy as a Python web service on Render:
 - Build command: `pip install -r requirements.txt`
 - Start command: `python server.py`
 - Health check: `/api/health`
-- Environment variables: `AI_API_KEY` (Gemini key), `AI_MODEL` (default `gemini-2.5-flash`), `HOST=0.0.0.0`, `PORT` (set by Render)
+- Environment variables: `AI_API_KEY` (Gemini key), `AI_MODEL` (default `gemini-3.8-flash`), `HOST=0.0.0.0`, `PORT` (set by Render)
 
 ## Usage examples
 

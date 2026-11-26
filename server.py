@@ -17,7 +17,7 @@ MAX_CHARS = 4000
 
 # Gemini REST endpoint: POST /v1beta/models/{model}:generateContent
 DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
-DEFAULT_MODEL = "gemini-2.5-flash"
+DEFAULT_MODEL = "gemini-3.8-flash"
 
 # System prompt is kept server-side and sent verbatim with every request.
 SYSTEM_PROMPT = (
@@ -119,7 +119,7 @@ def call_ai(text: str, tone: str) -> str:
     )
 
     try:
-        with urllib.request.urlopen(request, timeout=30) as response:
+        with urllib.request.urlopen(request, timeout=60) as response:
             data = json.loads(response.read().decode("utf-8"))
     except urllib.error.HTTPError as error:
         body = error.read().decode("utf-8", errors="replace")
