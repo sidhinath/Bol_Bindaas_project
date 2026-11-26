@@ -43,7 +43,7 @@ It is not a word-by-word dictionary translation. The AI is instructed to *write*
 ## Project structure
 
 ```text
-BolBindaas/
+Bol_Bindaas_project/
 ├── index.html        # Page structure: input panel, tone selector, output card, actions
 ├── style.css         # Responsive layout, dark/light theme tokens, animations
 ├── app.js            # Frontend logic: conversion, voice input, copy, listen, theme
@@ -71,7 +71,7 @@ BolBindaas/
 
 ```bash
 git clone https://github.com/sidhinath/Bol_Bindaas_project.git
-cd BolBindaas
+cd Bol_Bindaas_project
 ```
 
 Create the environment file from the template:
