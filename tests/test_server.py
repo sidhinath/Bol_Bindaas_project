@@ -37,6 +37,10 @@ ENV_KEYS = (
     "GOOGLE_API_KEY",
     "AI_BASE_URL",
     "AI_MODEL",
+    "AI_FALLBACK_MODEL",
+    "AI_TIMEOUT_SECONDS",
+    "AI_MAX_ATTEMPTS",
+    "AI_DEBUG",
 )
 
 
@@ -74,6 +78,7 @@ class MockGeminiHandler(BaseHTTPRequestHandler):
             {"content": {"parts": [{"text": "Today I am feeling a little low."}]}}
         ]
     }
+    responses = []
     requests = []
 
     def do_POST(self):
@@ -87,8 +92,13 @@ class MockGeminiHandler(BaseHTTPRequestHandler):
             }
         )
 
-        raw = json.dumps(type(self).payload).encode("utf-8")
-        self.send_response(type(self).status)
+        if type(self).responses:
+            status, payload = type(self).responses.pop(0)
+        else:
+            status, payload = type(self).status, type(self).payload
+
+        raw = json.dumps(payload).encode("utf-8")
+        self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(raw)))
         self.end_headers()
@@ -107,11 +117,15 @@ class ConfigTests(unittest.TestCase):
     def setUp(self):
         self.saved_config = server.CONFIG.copy()
         self.saved_debug = server.DEBUG
+        self.saved_timeout = server.GEMINI_TIMEOUT_SECONDS
+        self.saved_attempts = server.MAX_ATTEMPTS
 
     def tearDown(self):
         server.CONFIG.clear()
         server.CONFIG.update(self.saved_config)
         server.DEBUG = self.saved_debug
+        server.GEMINI_TIMEOUT_SECONDS = self.saved_timeout
+        server.MAX_ATTEMPTS = self.saved_attempts
 
     def test_system_prompt_matches_the_required_text_verbatim(self):
         self.assertEqual(server.SYSTEM_PROMPT, EXPECTED_SYSTEM_PROMPT)
@@ -130,6 +144,33 @@ class ConfigTests(unittest.TestCase):
                 "https://generativelanguage.googleapis.com/v1beta",
             )
             self.assertEqual(server.CONFIG["model"], "gemini-3.5-flash-lite")
+            self.assertEqual(server.CONFIG["fallback_model"], "gemini-3.1-flash-lite")
+            self.assertEqual(server.GEMINI_TIMEOUT_SECONDS, 30)
+            self.assertEqual(server.MAX_ATTEMPTS, 3)
+            self.assertFalse(server.DEBUG)
+
+    def test_retry_settings_can_be_overridden_and_clamped(self):
+        with patch.dict(
+            os.environ,
+            {"AI_TIMEOUT_SECONDS": "500", "AI_MAX_ATTEMPTS": "99"},
+        ), patch.object(server, "load_env", lambda: None):
+            server.configure()
+
+            self.assertEqual(server.GEMINI_TIMEOUT_SECONDS, 120)
+            self.assertEqual(server.MAX_ATTEMPTS, 5)
+
+    def test_fallback_model_can_be_customized_or_disabled(self):
+        with patch.dict(os.environ, {"AI_FALLBACK_MODEL": "gemini-custom-lite"}), patch.object(
+            server, "load_env", lambda: None
+        ):
+            server.configure()
+            self.assertEqual(server.CONFIG["fallback_model"], "gemini-custom-lite")
+
+        with patch.dict(os.environ, {"AI_FALLBACK_MODEL": "gemini-3.5-flash-lite"}), patch.object(
+            server, "load_env", lambda: None
+        ):
+            server.configure()
+            self.assertEqual(server.CONFIG["fallback_model"], "")
 
     def test_debug_mode_can_be_disabled(self):
         with patch.dict(os.environ, {"AI_DEBUG": "0"}), patch.object(
@@ -216,17 +257,32 @@ class ConfigTests(unittest.TestCase):
 class CallAiTests(unittest.TestCase):
     def setUp(self):
         self.saved_config = server.CONFIG.copy()
+        self.saved_timeout = server.GEMINI_TIMEOUT_SECONDS
+        self.saved_attempts = server.MAX_ATTEMPTS
+        self.saved_debug = server.DEBUG
         server.CONFIG.update(
             {
                 "key": "test-gemini-key",
                 "base_url": "https://gemini.example/v1beta",
                 "model": "gemini-3.5-flash-lite",
+                "fallback_model": "gemini-3.1-flash-lite",
             }
         )
+        server.GEMINI_TIMEOUT_SECONDS = 30
+        server.MAX_ATTEMPTS = 3
+        server.DEBUG = True
+
+        # Keep backoff delays out of the test runtime while still recording them.
+        self.sleep_patcher = patch.object(server.time, "sleep")
+        self.sleep_mock = self.sleep_patcher.start()
+        self.addCleanup(self.sleep_patcher.stop)
 
     def tearDown(self):
         server.CONFIG.clear()
         server.CONFIG.update(self.saved_config)
+        server.GEMINI_TIMEOUT_SECONDS = self.saved_timeout
+        server.MAX_ATTEMPTS = self.saved_attempts
+        server.DEBUG = self.saved_debug
 
     def test_request_uses_gemini_endpoint_headers_and_body(self):
         with patch.object(
@@ -256,7 +312,7 @@ class CallAiTests(unittest.TestCase):
         self.assertEqual(request.get_method(), "POST")
         self.assertEqual(headers["x-goog-api-key"], "test-gemini-key")
         self.assertNotIn("authorization", headers)
-        self.assertEqual(kwargs["timeout"], 90)
+        self.assertEqual(kwargs["timeout"], 30)
 
         self.assertEqual(
             payload["system_instruction"]["parts"][0]["text"], EXPECTED_SYSTEM_PROMPT
@@ -270,6 +326,20 @@ class CallAiTests(unittest.TestCase):
         self.assertNotIn("thinkingConfig", payload["generationConfig"])
         self.assertNotIn("thinking_config", payload["generationConfig"])
         self.assertNotIn("reasoning_effort", payload)
+
+    def test_payload_json_is_compact_to_reduce_request_size(self):
+        with patch.object(
+            server.urllib.request,
+            "urlopen",
+            return_value=FakeResponse(
+                {"candidates": [{"content": {"parts": [{"text": "Done."}]}}]}
+            ),
+        ) as urlopen:
+            server.call_ai("test", "normal")
+
+        raw = urlopen.call_args.args[0].data
+        expected = json.dumps(json.loads(raw.decode("utf-8")), separators=(",", ":"))
+        self.assertEqual(raw.decode("utf-8"), expected)
 
     def test_request_and_response_details_are_logged(self):
         response_body = {
@@ -286,8 +356,11 @@ class CallAiTests(unittest.TestCase):
         self.assertEqual(result, "Logged answer.")
         self.assertIn("model=gemini-3.5-flash-lite", logs)
         self.assertIn("payload_bytes=", logs)
-        self.assertIn("timeout_seconds=90", logs)
-        self.assertIn("Gemini response: status=200", logs)
+        self.assertIn("timeout_seconds=30", logs)
+        self.assertIn("Gemini attempt 1/3", logs)
+        self.assertIn("elapsed_seconds=", logs)
+        self.assertIn("Gemini response: attempt=1", logs)
+        self.assertIn("status=200", logs)
         self.assertIn("Gemini response body:", logs)
         self.assertIn("Logged answer.", logs)
 
@@ -311,10 +384,12 @@ class CallAiTests(unittest.TestCase):
         self.assertEqual(
             raised.exception.message, "Gemini HTTP 400: Exact Gemini failure detail"
         )
-        self.assertIn("Gemini HTTP error: status=400", logs)
+        self.assertIn("Gemini HTTP error: attempt=1", logs)
+        self.assertIn("status=400", logs)
         self.assertIn("Gemini error body:", logs)
         self.assertIn("Exact Gemini failure detail", logs)
         self.assertIn("Traceback (most recent call last):", logs)
+        self.assertEqual(self.sleep_mock.call_count, 0)
 
     def test_timeout_logs_timeout_details_and_traceback(self):
         output = io.StringIO()
@@ -325,10 +400,12 @@ class CallAiTests(unittest.TestCase):
                     server.call_ai("test", "normal")
 
         logs = output.getvalue()
-        self.assertEqual(raised.exception.status, 504)
+        self.assertEqual(raised.exception.status, 503)
+        self.assertIn("Gemini is taking longer than usual", raised.exception.message)
         self.assertIn("Gemini timeout", raised.exception.message)
-        self.assertIn("timeout_seconds=90", logs)
+        self.assertIn("timeout_seconds=30", logs)
         self.assertIn("Traceback (most recent call last):", logs)
+        self.assertEqual(self.sleep_mock.call_count, 2)
 
     def test_non_normal_tone_is_added_to_user_content(self):
         with patch.object(
@@ -400,7 +477,7 @@ class CallAiTests(unittest.TestCase):
         self.assertEqual(raised.exception.status, 502)
         self.assertIn("Thinking level MINIMAL", raised.exception.message)
 
-    def test_network_error_is_mapped_to_504(self):
+    def test_network_error_is_reported_as_a_friendly_overload(self):
         with patch.object(
             server.urllib.request,
             "urlopen",
@@ -409,17 +486,119 @@ class CallAiTests(unittest.TestCase):
             with self.assertRaises(server.ApiError) as raised:
                 server.call_ai("test", "normal")
 
-        self.assertEqual(raised.exception.status, 504)
+        self.assertEqual(raised.exception.status, 503)
+        self.assertIn("Gemini is taking longer than usual", raised.exception.message)
         self.assertIn("Gemini connection error", raised.exception.message)
 
-    def test_timeout_is_mapped_to_504(self):
-        with patch.object(server.urllib.request, "urlopen", side_effect=TimeoutError()):
+    def test_timeout_is_retried_with_exponential_backoff(self):
+        with patch.object(server.urllib.request, "urlopen", side_effect=TimeoutError()) as urlopen:
             with self.assertRaises(server.ApiError) as raised:
                 server.call_ai("test", "normal")
 
-        self.assertEqual(raised.exception.status, 504)
-        self.assertIn("Gemini timeout", raised.exception.message)
-        self.assertNotIn("Please try again", raised.exception.message)
+        self.assertEqual(raised.exception.status, 503)
+        self.assertIn("Gemini is taking longer than usual", raised.exception.message)
+        self.assertNotIn("Gemini took too long", raised.exception.message)
+        self.assertEqual(urlopen.call_count, 3)
+        self.assertEqual([call.args[0] for call in self.sleep_mock.call_args_list], [1, 2])
+
+    def test_503_is_retried_with_backoff_and_then_succeeds(self):
+        overload = urllib.error.HTTPError(
+            "https://gemini.example/v1beta/models/gemini-3.5-flash-lite:generateContent",
+            503,
+            "Service Unavailable",
+            {},
+            io.BytesIO(b'{"error":{"message":"Model is currently experiencing high demand."}}'),
+        )
+        success = FakeResponse(
+            {"candidates": [{"content": {"parts": [{"text": "Recovered answer."}]}}]}
+        )
+        output = io.StringIO()
+
+        with patch.object(
+            server.urllib.request, "urlopen", side_effect=[overload, success]
+        ) as urlopen, contextlib.redirect_stdout(output):
+            result = server.call_ai("test", "normal")
+
+        logs = output.getvalue()
+        self.assertEqual(result, "Recovered answer.")
+        self.assertEqual(urlopen.call_count, 2)
+        self.assertEqual(self.sleep_mock.call_args_list[0].args, (1,))
+        self.assertIn("Gemini retry scheduled", logs)
+        self.assertIn("backoff=exponential", logs)
+        self.assertIn("attempt=1/3", logs)
+        self.assertIn("attempt=2/3", logs)
+
+    def test_retry_uses_the_lighter_fallback_model(self):
+        overload = urllib.error.HTTPError(
+            "https://gemini.example/v1beta/models/gemini-3.5-flash-lite:generateContent",
+            503,
+            "Service Unavailable",
+            {},
+            io.BytesIO(b'{"error":{"message":"High demand"}}'),
+        )
+        success = FakeResponse(
+            {"candidates": [{"content": {"parts": [{"text": "Fallback answer."}]}}]}
+        )
+
+        with patch.object(server.urllib.request, "urlopen", side_effect=[overload, success]) as urlopen:
+            server.call_ai("test", "normal")
+
+        first_url = urlopen.call_args_list[0].args[0].full_url
+        second_url = urlopen.call_args_list[1].args[0].full_url
+        self.assertIn("gemini-3.5-flash-lite", first_url)
+        self.assertIn("gemini-3.1-flash-lite", second_url)
+
+    def test_retry_after_header_is_honoured(self):
+        headers = {"Retry-After": "3"}
+        overload = urllib.error.HTTPError(
+            "https://gemini.example/v1beta/models/gemini-3.5-flash-lite:generateContent",
+            429,
+            "Too Many Requests",
+            headers,
+            io.BytesIO(b'{"error":{"message":"Rate limited"}}'),
+        )
+        success = FakeResponse(
+            {"candidates": [{"content": {"parts": [{"text": "After waiting."}]}}]}
+        )
+
+        with patch.object(server.urllib.request, "urlopen", side_effect=[overload, success]):
+            server.call_ai("test", "normal")
+
+        self.assertEqual(self.sleep_mock.call_args_list[0].args, (3,))
+
+    def test_all_attempts_failing_returns_a_friendly_503(self):
+        error_body = b'{"error":{"message":"Model is currently experiencing high demand."}}'
+        errors = [
+            urllib.error.HTTPError(
+                "https://gemini.example/v1beta/models/gemini-3.5-flash-lite:generateContent",
+                503,
+                "Service Unavailable",
+                {},
+                io.BytesIO(error_body),
+            )
+            for _ in range(3)
+        ]
+
+        with patch.object(server.urllib.request, "urlopen", side_effect=errors) as urlopen:
+            with self.assertRaises(server.ApiError) as raised:
+                server.call_ai("test", "normal")
+
+        self.assertEqual(raised.exception.status, 503)
+        self.assertTrue(
+            raised.exception.message.startswith("Gemini is busy right now.")
+        )
+        self.assertIn("high demand", raised.exception.message)
+        self.assertEqual(urlopen.call_count, 3)
+        self.assertEqual([call.args[0] for call in self.sleep_mock.call_args_list], [1, 2])
+
+    def test_friendly_error_hides_details_when_debug_is_off(self):
+        error = server.ApiError(503, "Gemini HTTP 503: high demand", overload=True)
+        server.DEBUG = False
+
+        friendly = server.friendly_error(error)
+
+        self.assertEqual(friendly.status, 503)
+        self.assertEqual(friendly.message, "Gemini is busy right now. Please try again in a moment.")
 
     def test_invalid_json_response_is_mapped_to_502(self):
         with patch.object(
@@ -512,24 +691,39 @@ class HandlerIntegrationTests(unittest.TestCase):
 
     def setUp(self):
         self.saved_config = server.CONFIG.copy()
+        self.saved_timeout = server.GEMINI_TIMEOUT_SECONDS
+        self.saved_attempts = server.MAX_ATTEMPTS
+        self.saved_debug = server.DEBUG
         MockGeminiHandler.status = 200
         MockGeminiHandler.payload = {
             "candidates": [
                 {"content": {"parts": [{"text": "Today I am feeling a little low."}]}}
             ]
         }
+        MockGeminiHandler.responses.clear()
         MockGeminiHandler.requests.clear()
         server.CONFIG.update(
             {
                 "key": "test-gemini-key",
                 "base_url": f"http://127.0.0.1:{self.mock_port}/v1beta",
                 "model": "gemini-3.5-flash-lite",
+                "fallback_model": "gemini-3.1-flash-lite",
             }
         )
+        server.GEMINI_TIMEOUT_SECONDS = 30
+        server.MAX_ATTEMPTS = 3
+        server.DEBUG = True
+
+        self.sleep_patcher = patch.object(server.time, "sleep")
+        self.sleep_patcher.start()
+        self.addCleanup(self.sleep_patcher.stop)
 
     def tearDown(self):
         server.CONFIG.clear()
         server.CONFIG.update(self.saved_config)
+        server.GEMINI_TIMEOUT_SECONDS = self.saved_timeout
+        server.MAX_ATTEMPTS = self.saved_attempts
+        server.DEBUG = self.saved_debug
 
     def send_request(self, path, method="GET", payload=None, raw=None):
         if raw is not None:
@@ -560,6 +754,8 @@ class HandlerIntegrationTests(unittest.TestCase):
         self.assertEqual(data["configured"], True)
         self.assertEqual(data["provider"], "gemini")
         self.assertEqual(data["model"], "gemini-3.5-flash-lite")
+        self.assertEqual(data["fallback_model"], "gemini-3.1-flash-lite")
+        self.assertEqual(data["attempts"], 3)
 
     def test_health_endpoint_reports_missing_key(self):
         server.CONFIG["key"] = ""
@@ -652,6 +848,50 @@ class HandlerIntegrationTests(unittest.TestCase):
         self.assertEqual(status, 502)
         self.assertTrue(data["error"].startswith("Gemini HTTP 400:"))
         self.assertIn("Thinking level MINIMAL", data["error"])
+
+    def test_overload_is_retried_with_fallback_model_end_to_end(self):
+        MockGeminiHandler.responses.extend(
+            [
+                (503, {"error": {"message": "Model is currently experiencing high demand."}}),
+                (
+                    200,
+                    {
+                        "candidates": [
+                            {"content": {"parts": [{"text": "Recovered by fallback."}]}}
+                        ]
+                    },
+                ),
+            ]
+        )
+
+        status, body = self.send_request(
+            "/api/convert",
+            method="POST",
+            payload={"text": "test", "tone": "normal"},
+        )
+        data = json.loads(body)
+
+        self.assertEqual(status, 200)
+        self.assertEqual(data["text"], "Recovered by fallback.")
+        self.assertEqual(len(MockGeminiHandler.requests), 2)
+        self.assertIn("gemini-3.1-flash-lite", MockGeminiHandler.requests[1]["path"])
+
+    def test_persistent_overload_returns_a_friendly_503_end_to_end(self):
+        MockGeminiHandler.responses.extend(
+            (503, {"error": {"message": "Model is currently experiencing high demand."}})
+            for _ in range(3)
+        )
+
+        status, body = self.send_request(
+            "/api/convert",
+            method="POST",
+            payload={"text": "test", "tone": "normal"},
+        )
+        data = json.loads(body)
+
+        self.assertEqual(status, 503)
+        self.assertIn("Gemini is busy right now", data["error"])
+        self.assertEqual(len(MockGeminiHandler.requests), 3)
 
     def test_unknown_post_route_returns_404(self):
         status, body = self.send_request(

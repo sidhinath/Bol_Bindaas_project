@@ -13,6 +13,7 @@ BolBindaas converts Hinglish (Hindi in Roman English) into clean, natural Englis
 - Hinglish text input with character count
 - Voice input via Web Speech API (`hi-IN`)
 - AI conversion through a server-side API call
+- Automatic retries with exponential backoff and a lighter-model fallback when Gemini is overloaded
 - Tone selector: Normal, Formal, Casual, Poetic
 - Copy output to clipboard
 - Listen to output with text-to-speech (`en-US`)
@@ -34,7 +35,7 @@ BolBindaas converts Hinglish (Hindi in Roman English) into clean, natural Englis
 | Frontend | HTML5, CSS3, vanilla JavaScript |
 | Browser APIs | Web Speech API, SpeechSynthesis, Clipboard API, localStorage |
 | Backend | Python 3 standard library (`http.server`, `urllib.request`) |
-| AI | Gemini API (`generateContent`, default model `gemini-3.5-flash-lite`) |
+| AI | Gemini API (`generateContent`, `gemini-3.5-flash-lite` with `gemini-3.1-flash-lite` fallback; 3 attempts, exponential backoff) |
 | Dependencies | None |
 | Testing | Python `unittest` + Node built-in test runner |
 
@@ -80,6 +81,9 @@ Add your key to `.env`:
 ```env
 AI_API_KEY=AIza-your-gemini-key-here
 AI_MODEL=gemini-3.5-flash-lite
+# AI_FALLBACK_MODEL=gemini-3.1-flash-lite  # optional, lighter backup model
+# AI_MAX_ATTEMPTS=3                        # optional, 1-5
+# AI_TIMEOUT_SECONDS=30                    # optional, 5-120
 # AI_BASE_URL=https://generativelanguage.googleapis.com/v1beta  # optional override
 ```
 
@@ -120,6 +124,8 @@ npm run test:coverage
 
 Node prints frontend coverage to the terminal. Python writes a line-coverage report for `server.py` to `.coverage/server.py.cover`.
 
+The backend tests mock Gemini locally, so retries, fallback, and overload responses are covered without an API key. Render logs include the selected model, payload size, response status, elapsed time, and every retry attempt.
+
 ## Deployment
 
 Deploy as a Python web service on Render:
@@ -128,7 +134,7 @@ Deploy as a Python web service on Render:
 - Build command: `pip install -r requirements.txt`
 - Start command: `python server.py`
 - Health check: `/api/health`
-- Environment variables: `AI_API_KEY` (Gemini key), `AI_MODEL` (default `gemini-3.5-flash-lite`), `AI_DEBUG` (set `0` to disable verbose Gemini error logging), `HOST=0.0.0.0`, `PORT` (set by Render)
+- Environment variables: `AI_API_KEY` (Gemini key), `AI_MODEL` (default `gemini-3.5-flash-lite`), `AI_FALLBACK_MODEL` (default `gemini-3.1-flash-lite`), `AI_MAX_ATTEMPTS` (default `3`), `AI_TIMEOUT_SECONDS` (default `30`), `AI_DEBUG` (set `1` to include raw Gemini details in browser responses), `HOST=0.0.0.0`, `PORT` (set by Render)
 
 ## Usage examples
 

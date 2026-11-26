@@ -22,7 +22,16 @@ DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
 # Fastest Gemini tier, recommended for translation/summarization. It uses
 # minimal thinking by default, so no unsupported thinkingConfig is sent.
 DEFAULT_MODEL = "gemini-3.5-flash-lite"
-GEMINI_TIMEOUT_SECONDS = 90
+DEFAULT_FALLBACK_MODEL = "gemini-3.1-flash-lite"
+DEFAULT_TIMEOUT_SECONDS = 30
+DEFAULT_MAX_ATTEMPTS = 3
+RETRY_BASE_DELAY_SECONDS = 1
+MAX_RETRY_DELAY_SECONDS = 4
+RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
+TEMPORARY_STATUS_CODES = {429, 500, 502, 503, 504}
+
+GEMINI_TIMEOUT_SECONDS = DEFAULT_TIMEOUT_SECONDS
+MAX_ATTEMPTS = DEFAULT_MAX_ATTEMPTS
 
 # System prompt is kept server-side and sent verbatim with every request.
 SYSTEM_PROMPT = (
@@ -38,20 +47,31 @@ CONFIG = {
     "key": "",
     "base_url": DEFAULT_BASE_URL,
     "model": DEFAULT_MODEL,
+    "fallback_model": DEFAULT_FALLBACK_MODEL,
 }
 
-# Debug mode is on by default while diagnosing the live Gemini failures.
-# Set AI_DEBUG=0 to switch back to shorter, user-facing messages later.
-DEBUG = True
+# Browser responses are user-friendly by default. Set AI_DEBUG=1 to append the
+# raw Gemini error text; server logs always keep the full error and traceback.
+DEBUG = False
 
 
 class ApiError(Exception):
     """An error with an HTTP status safe to send back to the browser."""
 
-    def __init__(self, status: int, message: str):
+    def __init__(
+        self,
+        status: int,
+        message: str,
+        retryable: bool = False,
+        overload: bool = False,
+        headers: dict | None = None,
+    ):
         super().__init__(message)
         self.status = status
         self.message = message
+        self.retryable = retryable
+        self.overload = overload
+        self.headers = headers or {}
 
 
 def log(message: str) -> None:
@@ -72,6 +92,17 @@ def env_flag(name: str, default: bool) -> bool:
     return value.strip().lower() not in ("0", "false", "no", "off")
 
 
+def env_int(name: str, default: int, minimum: int, maximum: int) -> int:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    try:
+        number = int(value.strip())
+    except (AttributeError, ValueError):
+        return default
+    return max(minimum, min(number, maximum))
+
+
 def error_message_from_body(body: str) -> str:
     """Extract Gemini's exact error message, falling back to the raw body."""
     try:
@@ -85,6 +116,43 @@ def error_message_from_body(body: str) -> str:
         if parsed.get("message"):
             return str(parsed["message"])
     return body
+
+
+def retry_delay(attempt: int, headers: dict | None = None) -> int:
+    """Exponential backoff, raised to Gemini's Retry-After when present."""
+    delay = min(RETRY_BASE_DELAY_SECONDS * (2 ** (attempt - 1)), MAX_RETRY_DELAY_SECONDS)
+    headers = headers or {}
+    retry_after = headers.get("Retry-After") or headers.get("retry-after")
+    if retry_after:
+        try:
+            delay = max(delay, min(int(retry_after), MAX_RETRY_DELAY_SECONDS))
+        except (TypeError, ValueError):
+            pass
+    return delay
+
+
+def model_for_attempt(attempt: int) -> str:
+    """Use the configured model first, then a lighter fallback if available."""
+    models = [CONFIG["model"]]
+    fallback = CONFIG.get("fallback_model")
+    if fallback and fallback not in models:
+        models.append(fallback)
+    return models[min(attempt - 1, len(models) - 1)]
+
+
+def friendly_error(error: ApiError) -> ApiError:
+    """Turn temporary Gemini failures into a calm, actionable browser message."""
+    if not error.overload:
+        return error
+
+    if error.status == 504 or "timeout" in error.message.lower():
+        message = "Gemini is taking longer than usual. Please try again in a moment."
+    else:
+        message = "Gemini is busy right now. Please try again in a moment."
+
+    if DEBUG:
+        message += f" Details: {error.message}"
+    return ApiError(503, message)
 
 
 def load_env() -> None:
@@ -107,7 +175,7 @@ def load_env() -> None:
 
 def configure() -> None:
     """Load AI settings, tolerating leftover OpenAI values from older deploys."""
-    global DEBUG
+    global DEBUG, GEMINI_TIMEOUT_SECONDS, MAX_ATTEMPTS
 
     load_env()
 
@@ -131,40 +199,37 @@ def configure() -> None:
         model = DEFAULT_MODEL
     CONFIG["model"] = model or DEFAULT_MODEL
 
-    DEBUG = env_flag("AI_DEBUG", True)
+    fallback = os.getenv("AI_FALLBACK_MODEL", DEFAULT_FALLBACK_MODEL).strip()
+    if fallback.lower().startswith(("gpt-", "o1", "o3", "o4")):
+        log(f"Ignoring old OpenAI AI_FALLBACK_MODEL={fallback!r}.")
+        fallback = DEFAULT_FALLBACK_MODEL
+    CONFIG["fallback_model"] = fallback or DEFAULT_FALLBACK_MODEL
+    if CONFIG["fallback_model"] == CONFIG["model"]:
+        CONFIG["fallback_model"] = ""
+
+    GEMINI_TIMEOUT_SECONDS = env_int(
+        "AI_TIMEOUT_SECONDS", DEFAULT_TIMEOUT_SECONDS, 5, 120
+    )
+    MAX_ATTEMPTS = env_int("AI_MAX_ATTEMPTS", DEFAULT_MAX_ATTEMPTS, 1, 5)
+    DEBUG = env_flag("AI_DEBUG", False)
+
     log(
         "Gemini config: "
         f"model={CONFIG['model']} "
+        f"fallback_model={CONFIG['fallback_model'] or 'none'} "
+        f"attempts={MAX_ATTEMPTS} "
         f"base_url={CONFIG['base_url']} "
         f"debug={DEBUG} "
         f"timeout_seconds={GEMINI_TIMEOUT_SECONDS}"
     )
 
 
-def call_ai(text: str, tone: str) -> str:
-    """Send the text to Gemini generateContent and return English."""
-    started = time.monotonic()
-
-    if not CONFIG["key"]:
-        message = (
-            "Gemini API key is not configured. Add AI_API_KEY to .env and restart "
-            "the server (or set it in the hosting platform)."
-        )
-        log(f"Gemini error: {message}")
-        raise ApiError(503, message)
-
-    # The tone is an instruction layered on top of the fixed system prompt.
-    user_content = text if tone == "normal" else f"Tone: {tone}\n\nText: {text}"
-    payload = {
-        "system_instruction": {"parts": [{"text": SYSTEM_PROMPT}]},
-        "contents": [{"role": "user", "parts": [{"text": user_content}]}],
-        "generationConfig": {"maxOutputTokens": 1200},
-    }
-
-    endpoint = (
-        f"{CONFIG['base_url'].rstrip('/')}/models/{CONFIG['model']}:generateContent"
-    )
-    body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+def call_gemini_once(
+    body: bytes, model: str, attempt: int, overall_started: float
+) -> dict:
+    """Make one Gemini request. Temporary failures are marked retryable."""
+    attempt_started = time.monotonic()
+    endpoint = f"{CONFIG['base_url'].rstrip('/')}/models/{model}:generateContent"
     request = urllib.request.Request(
         endpoint,
         data=body,
@@ -176,8 +241,9 @@ def call_ai(text: str, tone: str) -> str:
     )
 
     log(
-        f"Gemini request: model={CONFIG['model']} endpoint={endpoint} "
-        f"payload_bytes={len(body)} timeout_seconds={GEMINI_TIMEOUT_SECONDS}"
+        f"Gemini attempt {attempt}/{MAX_ATTEMPTS}: model={model} "
+        f"endpoint={endpoint} payload_bytes={len(body)} "
+        f"timeout_seconds={GEMINI_TIMEOUT_SECONDS}"
     )
     log(f"Gemini request payload: {body.decode('utf-8')}")
 
@@ -189,55 +255,77 @@ def call_ai(text: str, tone: str) -> str:
             response_status = getattr(response, "status", None)
             raw_response = response.read().decode("utf-8", errors="replace")
             log(
-                f"Gemini response: status={response_status} "
+                f"Gemini response: attempt={attempt} model={model} "
+                f"status={response_status} "
                 f"response_bytes={len(raw_response.encode('utf-8'))} "
-                f"elapsed_seconds={time.monotonic() - started:.2f}"
+                f"elapsed_seconds={time.monotonic() - attempt_started:.2f}"
             )
             log(f"Gemini response body: {raw_response}")
-            data = json.loads(raw_response)
+            return json.loads(raw_response)
     except urllib.error.HTTPError as error:
         raw_response = error.read().decode("utf-8", errors="replace")
         response_status = error.code
         headers = dict(error.headers.items()) if error.headers else {}
         log(
-            f"Gemini HTTP error: status={response_status} reason={error.reason!r} "
-            f"elapsed_seconds={time.monotonic() - started:.2f} headers={headers}"
+            f"Gemini HTTP error: attempt={attempt} model={model} "
+            f"status={response_status} reason={error.reason!r} "
+            f"elapsed_seconds={time.monotonic() - attempt_started:.2f} "
+            f"headers={headers}"
         )
         log(f"Gemini error body: {raw_response}")
         log_exception("Gemini HTTPError", error)
         detail = error_message_from_body(raw_response)
-        raise ApiError(502, f"Gemini HTTP {response_status}: {detail}") from error
+        temporary = response_status in TEMPORARY_STATUS_CODES
+        browser_status = 503 if response_status in (429, 503) else 502
+        raise ApiError(
+            browser_status,
+            f"Gemini HTTP {response_status}: {detail}",
+            retryable=response_status in RETRYABLE_STATUS_CODES,
+            overload=temporary,
+            headers=headers,
+        ) from error
     except urllib.error.URLError as error:
+        elapsed = time.monotonic() - attempt_started
         log(
-            f"Gemini connection error: elapsed_seconds={time.monotonic() - started:.2f} "
+            f"Gemini connection error: attempt={attempt} model={model} "
+            f"elapsed_seconds={elapsed:.2f} "
             f"timeout_seconds={GEMINI_TIMEOUT_SECONDS}"
         )
         log_exception("Gemini URLError", error)
         raise ApiError(
             504,
-            f"Gemini connection error after {time.monotonic() - started:.2f}s "
+            f"Gemini connection error after {elapsed:.2f}s "
             f"(timeout={GEMINI_TIMEOUT_SECONDS}s): {error.reason!r}",
+            retryable=True,
+            overload=True,
         ) from error
     except TimeoutError as error:
+        elapsed = time.monotonic() - attempt_started
         log(
-            f"Gemini timeout: elapsed_seconds={time.monotonic() - started:.2f} "
+            f"Gemini timeout: attempt={attempt} model={model} "
+            f"elapsed_seconds={elapsed:.2f} "
             f"timeout_seconds={GEMINI_TIMEOUT_SECONDS} endpoint={endpoint}"
         )
         log_exception("Gemini TimeoutError", error)
         raise ApiError(
             504,
-            f"Gemini timeout after {time.monotonic() - started:.2f}s "
+            f"Gemini timeout after {elapsed:.2f}s "
             f"(configured timeout={GEMINI_TIMEOUT_SECONDS}s): {error!r}",
+            retryable=True,
+            overload=True,
         ) from error
     except json.JSONDecodeError as error:
         log_exception("Gemini JSON decode error", error)
         log(f"Gemini invalid response body: {raw_response}")
         raise ApiError(
             502,
-            f"Invalid Gemini JSON after {time.monotonic() - started:.2f}s: {error}. "
-            f"Response: {raw_response}",
+            f"Invalid Gemini JSON after {time.monotonic() - attempt_started:.2f}s: "
+            f"{error}. Response: {raw_response}",
         ) from error
 
+
+def extract_content(data: dict, model: str, overall_started: float) -> str:
+    """Validate a successful Gemini response and return the English text."""
     full_response = json.dumps(data, ensure_ascii=False)
 
     if not isinstance(data, dict):
@@ -269,11 +357,67 @@ def call_ai(text: str, tone: str) -> str:
         raise ApiError(502, f"Gemini returned an empty result. Full response: {full_response}")
 
     log(
-        f"Gemini success: model={CONFIG['model']} "
-        f"elapsed_seconds={time.monotonic() - started:.2f} "
+        f"Gemini success: model={model} "
+        f"elapsed_seconds={time.monotonic() - overall_started:.2f} "
         f"output_chars={len(content.strip())}"
     )
     return content.strip()
+
+
+def call_ai(text: str, tone: str) -> str:
+    """Send text to Gemini with retries, backoff, and a lighter-model fallback."""
+    overall_started = time.monotonic()
+
+    if not CONFIG["key"]:
+        message = (
+            "Gemini API key is not configured. Add AI_API_KEY to .env and restart "
+            "the server (or set it in the hosting platform)."
+        )
+        log(f"Gemini error: {message}")
+        raise ApiError(503, message)
+
+    # The tone is an instruction layered on top of the fixed system prompt.
+    user_content = text if tone == "normal" else f"Tone: {tone}\n\nText: {text}"
+    payload = {
+        "system_instruction": {"parts": [{"text": SYSTEM_PROMPT}]},
+        "contents": [{"role": "user", "parts": [{"text": user_content}]}],
+        "generationConfig": {"maxOutputTokens": 1200},
+    }
+    # Compact JSON keeps each retry payload small; no thinking config is sent.
+    body = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+
+    for attempt in range(1, MAX_ATTEMPTS + 1):
+        model = model_for_attempt(attempt)
+        try:
+            data = call_gemini_once(body, model, attempt, overall_started)
+            return extract_content(data, model, overall_started)
+        except ApiError as error:
+            log(
+                f"Gemini attempt failed: attempt={attempt}/{MAX_ATTEMPTS} "
+                f"model={model} status={error.status} "
+                f"retryable={error.retryable} overloaded={error.overload} "
+                f"elapsed_seconds={time.monotonic() - overall_started:.2f} "
+                f"reason={error.message}"
+            )
+
+            if not error.retryable or attempt >= MAX_ATTEMPTS:
+                final_error = friendly_error(error)
+                log(
+                    f"Gemini final error: status={final_error.status} "
+                    f"attempts={attempt} message={final_error.message}"
+                )
+                raise final_error from error
+
+            delay = retry_delay(attempt, error.headers)
+            next_model = model_for_attempt(attempt + 1)
+            log(
+                f"Gemini retry scheduled: next_attempt={attempt + 1}/{MAX_ATTEMPTS} "
+                f"model={next_model} fallback={next_model != model} "
+                f"delay_seconds={delay} backoff=exponential"
+            )
+            time.sleep(delay)
+
+    raise ApiError(503, "Gemini is busy right now. Please try again in a moment.")
 
 
 class AppHandler(SimpleHTTPRequestHandler):
@@ -292,6 +436,8 @@ class AppHandler(SimpleHTTPRequestHandler):
                     "configured": bool(CONFIG["key"]),
                     "provider": "gemini",
                     "model": CONFIG["model"],
+                    "fallback_model": CONFIG.get("fallback_model") or None,
+                    "attempts": MAX_ATTEMPTS,
                 },
             )
             return
