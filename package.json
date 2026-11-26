@@ -5,7 +5,11 @@
   "private": true,
   "scripts": {
     "start": "python server.py",
-    "dev": "python server.py"
+    "dev": "python server.py",
+    "test": "python -m unittest discover -s tests -p \"test_*.py\" -v && node --test",
+    "test:backend": "python -m unittest discover -s tests -p \"test_*.py\" -v",
+    "test:frontend": "node --test",
+    "test:coverage": "python tests/python_coverage.py && node --test --experimental-test-coverage --test-coverage-exclude=tests/**"
   },
   "repository": {
     "type": "git",

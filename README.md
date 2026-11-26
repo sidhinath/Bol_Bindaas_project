@@ -36,6 +36,7 @@ BolBindaas converts Hinglish (Hindi in Roman English) into clean, natural Englis
 | Backend | Python 3 standard library (`http.server`, `urllib.request`) |
 | AI | Gemini API (`generateContent`, default model `gemini-3.8-flash`) |
 | Dependencies | None |
+| Testing | Python `unittest` + Node built-in test runner |
 
 ## Project structure
 
@@ -48,6 +49,7 @@ Bol_Bindaas_project/
 ├── .env.example      # Environment variable template
 ├── package.json      # Project metadata and npm scripts
 ├── requirements.txt  # No third-party packages
+├── tests/            # Automated backend and frontend tests
 └── .gitignore        # Ignores .env and caches
 ```
 
@@ -95,6 +97,29 @@ npm start
 
 Open **http://127.0.0.1:5500/**. Health check: **/api/health**.
 
+## Testing
+
+The test suite uses only built-in tools, so there is nothing extra to install.
+
+```bash
+npm test
+```
+
+Run either part on its own:
+
+```bash
+npm run test:backend
+npm run test:frontend
+```
+
+Generate coverage reports:
+
+```bash
+npm run test:coverage
+```
+
+Node prints frontend coverage to the terminal. Python writes a line-coverage report for `server.py` to `.coverage/server.py.cover`.
+
 ## Deployment
 
 Deploy as a Python web service on Render:
@@ -103,7 +128,7 @@ Deploy as a Python web service on Render:
 - Build command: `pip install -r requirements.txt`
 - Start command: `python server.py`
 - Health check: `/api/health`
-- Environment variables: `AI_API_KEY` (Gemini key), `AI_MODEL` (default `gemini-3.8-flash`), `HOST=0.0.0.0`, `PORT` (set by Render)
+- Environment variables: `AI_API_KEY` (Gemini key), `AI_MODEL` (default `gemini-3.8-flash`), `AI_DEBUG` (set `0` to disable verbose Gemini error logging), `HOST=0.0.0.0`, `PORT` (set by Render)
 
 ## Usage examples
 

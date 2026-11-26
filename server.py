@@ -7,6 +7,8 @@ the API key, from the environment (or a local .env file).
 
 import json
 import os
+import time
+import traceback
 import urllib.error
 import urllib.request
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -18,6 +20,7 @@ MAX_CHARS = 4000
 # Gemini REST endpoint: POST /v1beta/models/{model}:generateContent
 DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
 DEFAULT_MODEL = "gemini-3.8-flash"
+GEMINI_TIMEOUT_SECONDS = 90
 
 # System prompt is kept server-side and sent verbatim with every request.
 SYSTEM_PROMPT = (
@@ -35,6 +38,10 @@ CONFIG = {
     "model": DEFAULT_MODEL,
 }
 
+# Debug mode is on by default while diagnosing the live Gemini failures.
+# Set AI_DEBUG=0 to switch back to shorter, user-facing messages later.
+DEBUG = True
+
 
 class ApiError(Exception):
     """An error with an HTTP status safe to send back to the browser."""
@@ -43,6 +50,39 @@ class ApiError(Exception):
         super().__init__(message)
         self.status = status
         self.message = message
+
+
+def log(message: str) -> None:
+    """Write immediately so Render captures lines before a worker restarts."""
+    print(message, flush=True)
+
+
+def log_exception(label: str, error: BaseException) -> None:
+    """Print an exception and its full traceback to the platform logs."""
+    log(f"{label}: {type(error).__name__}: {error}")
+    log(traceback.format_exc())
+
+
+def env_flag(name: str, default: bool) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() not in ("0", "false", "no", "off")
+
+
+def error_message_from_body(body: str) -> str:
+    """Extract Gemini's exact error message, falling back to the raw body."""
+    try:
+        parsed = json.loads(body)
+    except json.JSONDecodeError:
+        return body
+    if isinstance(parsed, dict):
+        detail = parsed.get("error")
+        if isinstance(detail, dict) and detail.get("message"):
+            return str(detail["message"])
+        if parsed.get("message"):
+            return str(parsed["message"])
+    return body
 
 
 def load_env() -> None:
@@ -65,6 +105,8 @@ def load_env() -> None:
 
 def configure() -> None:
     """Load AI settings, tolerating leftover OpenAI values from older deploys."""
+    global DEBUG
+
     load_env()
 
     key = (
@@ -77,25 +119,37 @@ def configure() -> None:
 
     base_url = os.getenv("AI_BASE_URL", DEFAULT_BASE_URL).strip()
     if "openai" in base_url.lower():
-        print("Ignoring old OpenAI AI_BASE_URL; using the Gemini endpoint.")
+        log("Ignoring old OpenAI AI_BASE_URL; using the Gemini endpoint.")
         base_url = DEFAULT_BASE_URL
     CONFIG["base_url"] = base_url or DEFAULT_BASE_URL
 
     model = os.getenv("AI_MODEL", DEFAULT_MODEL).strip()
     if model.lower().startswith(("gpt-", "o1", "o3", "o4")):
-        print(f"Ignoring old OpenAI AI_MODEL={model!r}; using {DEFAULT_MODEL}.")
+        log(f"Ignoring old OpenAI AI_MODEL={model!r}; using {DEFAULT_MODEL}.")
         model = DEFAULT_MODEL
     CONFIG["model"] = model or DEFAULT_MODEL
+
+    DEBUG = env_flag("AI_DEBUG", True)
+    log(
+        "Gemini config: "
+        f"model={CONFIG['model']} "
+        f"base_url={CONFIG['base_url']} "
+        f"debug={DEBUG} "
+        f"timeout_seconds={GEMINI_TIMEOUT_SECONDS}"
+    )
 
 
 def call_ai(text: str, tone: str) -> str:
     """Send the text to Gemini generateContent and return English."""
+    started = time.monotonic()
+
     if not CONFIG["key"]:
-        raise ApiError(
-            503,
+        message = (
             "Gemini API key is not configured. Add AI_API_KEY to .env and restart "
-            "the server (or set it in the hosting platform).",
+            "the server (or set it in the hosting platform)."
         )
+        log(f"Gemini error: {message}")
+        raise ApiError(503, message)
 
     # The tone is an instruction layered on top of the fixed system prompt.
     user_content = text if tone == "normal" else f"Tone: {tone}\n\nText: {text}"
@@ -108,9 +162,10 @@ def call_ai(text: str, tone: str) -> str:
     endpoint = (
         f"{CONFIG['base_url'].rstrip('/')}/models/{CONFIG['model']}:generateContent"
     )
+    body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
     request = urllib.request.Request(
         endpoint,
-        data=json.dumps(payload).encode("utf-8"),
+        data=body,
         headers={
             "Content-Type": "application/json",
             "x-goog-api-key": CONFIG["key"],
@@ -118,31 +173,83 @@ def call_ai(text: str, tone: str) -> str:
         method="POST",
     )
 
+    log(
+        f"Gemini request: model={CONFIG['model']} endpoint={endpoint} "
+        f"payload_bytes={len(body)} timeout_seconds={GEMINI_TIMEOUT_SECONDS}"
+    )
+    log(f"Gemini request payload: {body.decode('utf-8')}")
+
+    raw_response = None
+    response_status = None
+
     try:
-        with urllib.request.urlopen(request, timeout=90) as response:
-            data = json.loads(response.read().decode("utf-8"))
+        with urllib.request.urlopen(request, timeout=GEMINI_TIMEOUT_SECONDS) as response:
+            response_status = getattr(response, "status", None)
+            raw_response = response.read().decode("utf-8", errors="replace")
+            log(
+                f"Gemini response: status={response_status} "
+                f"response_bytes={len(raw_response.encode('utf-8'))} "
+                f"elapsed_seconds={time.monotonic() - started:.2f}"
+            )
+            log(f"Gemini response body: {raw_response}")
+            data = json.loads(raw_response)
     except urllib.error.HTTPError as error:
-        body = error.read().decode("utf-8", errors="replace")
-        detail = body
-        try:
-            parsed = json.loads(body)
-            detail = parsed.get("error", {}).get("message") or body
-        except (json.JSONDecodeError, AttributeError):
-            pass
-        detail = detail[:200]
-        if error.code in (400, 401, 403):
-            raise ApiError(
-                502,
-                "Gemini rejected the request. Check that AI_API_KEY is a valid "
-                f"Gemini API key and AI_MODEL is a Gemini model. Details: {detail}",
-            ) from error
-        raise ApiError(502, f"Gemini returned {error.code}. {detail}") from error
+        raw_response = error.read().decode("utf-8", errors="replace")
+        response_status = error.code
+        headers = dict(error.headers.items()) if error.headers else {}
+        log(
+            f"Gemini HTTP error: status={response_status} reason={error.reason!r} "
+            f"elapsed_seconds={time.monotonic() - started:.2f} headers={headers}"
+        )
+        log(f"Gemini error body: {raw_response}")
+        log_exception("Gemini HTTPError", error)
+        detail = error_message_from_body(raw_response)
+        raise ApiError(502, f"Gemini HTTP {response_status}: {detail}") from error
     except urllib.error.URLError as error:
-        raise ApiError(504, f"Could not reach Gemini: {error.reason}") from error
+        log(
+            f"Gemini connection error: elapsed_seconds={time.monotonic() - started:.2f} "
+            f"timeout_seconds={GEMINI_TIMEOUT_SECONDS}"
+        )
+        log_exception("Gemini URLError", error)
+        raise ApiError(
+            504,
+            f"Gemini connection error after {time.monotonic() - started:.2f}s "
+            f"(timeout={GEMINI_TIMEOUT_SECONDS}s): {error.reason!r}",
+        ) from error
     except TimeoutError as error:
-        raise ApiError(504, "Gemini took too long. Please try again.") from error
+        log(
+            f"Gemini timeout: elapsed_seconds={time.monotonic() - started:.2f} "
+            f"timeout_seconds={GEMINI_TIMEOUT_SECONDS} endpoint={endpoint}"
+        )
+        log_exception("Gemini TimeoutError", error)
+        raise ApiError(
+            504,
+            f"Gemini timeout after {time.monotonic() - started:.2f}s "
+            f"(configured timeout={GEMINI_TIMEOUT_SECONDS}s): {error!r}",
+        ) from error
     except json.JSONDecodeError as error:
-        raise ApiError(502, "Gemini returned invalid JSON.") from error
+        log_exception("Gemini JSON decode error", error)
+        log(f"Gemini invalid response body: {raw_response}")
+        raise ApiError(
+            502,
+            f"Invalid Gemini JSON after {time.monotonic() - started:.2f}s: {error}. "
+            f"Response: {raw_response}",
+        ) from error
+
+    full_response = json.dumps(data, ensure_ascii=False)
+
+    if not isinstance(data, dict):
+        log(f"Gemini unexpected response shape: {full_response}")
+        raise ApiError(502, f"Unexpected Gemini response shape: {full_response}")
+
+    # A blocked prompt can arrive with no candidates at all, so check feedback
+    # before indexing into candidates.
+    reason = (data.get("promptFeedback") or {}).get("blockReason")
+    if reason:
+        log(f"Gemini blocked prompt: reason={reason} response={full_response}")
+        raise ApiError(
+            502, f"Gemini blocked the prompt ({reason}). Full response: {full_response}"
+        )
 
     try:
         candidates = data.get("candidates") or []
@@ -151,15 +258,19 @@ def call_ai(text: str, tone: str) -> str:
             part.get("text", "") for part in parts if isinstance(part, dict)
         )
     except (IndexError, AttributeError, TypeError) as error:
-        raise ApiError(502, "Unexpected response shape from Gemini.") from error
+        log_exception("Gemini response parse error", error)
+        log(f"Gemini unexpected response shape: {full_response}")
+        raise ApiError(502, f"Unexpected Gemini response shape: {full_response}") from error
 
     if not content.strip():
-        feedback = data.get("promptFeedback") or {}
-        reason = feedback.get("blockReason")
-        if reason:
-            raise ApiError(502, f"Gemini blocked the prompt ({reason}). Please rephrase it.")
-        raise ApiError(502, "Gemini returned an empty result.")
+        log(f"Gemini empty result: {full_response}")
+        raise ApiError(502, f"Gemini returned an empty result. Full response: {full_response}")
 
+    log(
+        f"Gemini success: model={CONFIG['model']} "
+        f"elapsed_seconds={time.monotonic() - started:.2f} "
+        f"output_chars={len(content.strip())}"
+    )
     return content.strip()
 
 
@@ -228,7 +339,16 @@ class AppHandler(SimpleHTTPRequestHandler):
         try:
             result = call_ai(text.strip(), tone)
         except ApiError as error:
+            log(f"/api/convert failed: status={error.status} message={error.message}")
+            log_exception("ApiError returned to /api/convert", error)
             self.send_json(error.status, {"error": error.message})
+            return
+        except Exception as error:  # noqa: BLE001 - debugging live failures
+            log_exception("Unexpected /api/convert error", error)
+            self.send_json(
+                500,
+                {"error": str(error) if DEBUG else "Internal server error."},
+            )
             return
 
         self.send_json(200, {"text": result})
@@ -249,9 +369,9 @@ def main() -> None:
     host = os.getenv("HOST", "127.0.0.1")
     port = int(os.getenv("PORT", "5500"))
 
-    print(f"Serving {ROOT} at http://{host}:{port}")
-    print(f"AI provider: Gemini ({CONFIG['model']})")
-    print("Gemini key loaded." if CONFIG["key"] else "Gemini key missing — set AI_API_KEY in .env")
+    log(f"Serving {ROOT} at http://{host}:{port}")
+    log(f"AI provider: Gemini ({CONFIG['model']})")
+    log("Gemini key loaded." if CONFIG["key"] else "Gemini key missing — set AI_API_KEY in .env")
     ThreadingHTTPServer((host, port), AppHandler).serve_forever()
 
 

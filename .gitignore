@@ -1,5 +1,6 @@
 .env
 __pycache__/
 *.py[cod]
+.coverage/
 .venv/
 .DS_Store
