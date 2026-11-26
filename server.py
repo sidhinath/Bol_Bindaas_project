@@ -102,7 +102,10 @@ def call_ai(text: str, tone: str) -> str:
     payload = {
         "system_instruction": {"parts": [{"text": SYSTEM_PROMPT}]},
         "contents": [{"role": "user", "parts": [{"text": user_content}]}],
-        "generationConfig": {"maxOutputTokens": 1200},
+        "generationConfig": {
+            "maxOutputTokens": 1200,
+            "thinkingConfig": {"thinkingLevel": "minimal"},
+        },
     }
 
     endpoint = (
@@ -119,7 +122,7 @@ def call_ai(text: str, tone: str) -> str:
     )
 
     try:
-        with urllib.request.urlopen(request, timeout=60) as response:
+        with urllib.request.urlopen(request, timeout=90) as response:
             data = json.loads(response.read().decode("utf-8"))
     except urllib.error.HTTPError as error:
         body = error.read().decode("utf-8", errors="replace")
