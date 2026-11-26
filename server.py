@@ -19,7 +19,9 @@ MAX_CHARS = 4000
 
 # Gemini REST endpoint: POST /v1beta/models/{model}:generateContent
 DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
-DEFAULT_MODEL = "gemini-3.8-flash"
+# Fastest Gemini tier, recommended for translation/summarization. It uses
+# minimal thinking by default, so no unsupported thinkingConfig is sent.
+DEFAULT_MODEL = "gemini-3.5-flash-lite"
 GEMINI_TIMEOUT_SECONDS = 90
 
 # System prompt is kept server-side and sent verbatim with every request.

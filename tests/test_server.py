@@ -129,7 +129,7 @@ class ConfigTests(unittest.TestCase):
                 server.CONFIG["base_url"],
                 "https://generativelanguage.googleapis.com/v1beta",
             )
-            self.assertEqual(server.CONFIG["model"], "gemini-3.8-flash")
+            self.assertEqual(server.CONFIG["model"], "gemini-3.5-flash-lite")
 
     def test_debug_mode_can_be_disabled(self):
         with patch.dict(os.environ, {"AI_DEBUG": "0"}), patch.object(
@@ -178,7 +178,7 @@ class ConfigTests(unittest.TestCase):
                 server.CONFIG["base_url"],
                 "https://generativelanguage.googleapis.com/v1beta",
             )
-            self.assertEqual(server.CONFIG["model"], "gemini-3.8-flash")
+            self.assertEqual(server.CONFIG["model"], "gemini-3.5-flash-lite")
             self.assertIn("Ignoring old OpenAI", output.getvalue())
 
     def test_custom_gemini_settings_are_used(self):
@@ -220,7 +220,7 @@ class CallAiTests(unittest.TestCase):
             {
                 "key": "test-gemini-key",
                 "base_url": "https://gemini.example/v1beta",
-                "model": "gemini-3.8-flash",
+                "model": "gemini-3.5-flash-lite",
             }
         )
 
@@ -251,7 +251,7 @@ class CallAiTests(unittest.TestCase):
 
         self.assertEqual(
             request.full_url,
-            "https://gemini.example/v1beta/models/gemini-3.8-flash:generateContent",
+            "https://gemini.example/v1beta/models/gemini-3.5-flash-lite:generateContent",
         )
         self.assertEqual(request.get_method(), "POST")
         self.assertEqual(headers["x-goog-api-key"], "test-gemini-key")
@@ -284,7 +284,7 @@ class CallAiTests(unittest.TestCase):
 
         logs = output.getvalue()
         self.assertEqual(result, "Logged answer.")
-        self.assertIn("model=gemini-3.8-flash", logs)
+        self.assertIn("model=gemini-3.5-flash-lite", logs)
         self.assertIn("payload_bytes=", logs)
         self.assertIn("timeout_seconds=90", logs)
         self.assertIn("Gemini response: status=200", logs)
@@ -293,7 +293,7 @@ class CallAiTests(unittest.TestCase):
 
     def test_http_error_logs_status_body_and_traceback(self):
         error = urllib.error.HTTPError(
-            "https://gemini.example/v1beta/models/gemini-3.8-flash:generateContent",
+            "https://gemini.example/v1beta/models/gemini-3.5-flash-lite:generateContent",
             400,
             "Bad Request",
             {},
@@ -378,7 +378,7 @@ class CallAiTests(unittest.TestCase):
 
     def test_gemini_http_error_is_mapped_to_502(self):
         error = urllib.error.HTTPError(
-            "https://gemini.example/v1beta/models/gemini-3.8-flash:generateContent",
+            "https://gemini.example/v1beta/models/gemini-3.5-flash-lite:generateContent",
             400,
             "Bad Request",
             {},
@@ -523,7 +523,7 @@ class HandlerIntegrationTests(unittest.TestCase):
             {
                 "key": "test-gemini-key",
                 "base_url": f"http://127.0.0.1:{self.mock_port}/v1beta",
-                "model": "gemini-3.8-flash",
+                "model": "gemini-3.5-flash-lite",
             }
         )
 
@@ -559,7 +559,7 @@ class HandlerIntegrationTests(unittest.TestCase):
         self.assertEqual(data["status"], "ok")
         self.assertEqual(data["configured"], True)
         self.assertEqual(data["provider"], "gemini")
-        self.assertEqual(data["model"], "gemini-3.8-flash")
+        self.assertEqual(data["model"], "gemini-3.5-flash-lite")
 
     def test_health_endpoint_reports_missing_key(self):
         server.CONFIG["key"] = ""
@@ -584,7 +584,7 @@ class HandlerIntegrationTests(unittest.TestCase):
 
         gemini_request = MockGeminiHandler.requests[0]
         self.assertEqual(
-            gemini_request["path"], "/v1beta/models/gemini-3.8-flash:generateContent"
+            gemini_request["path"], "/v1beta/models/gemini-3.5-flash-lite:generateContent"
         )
         self.assertEqual(gemini_request["headers"]["x-goog-api-key"], "test-gemini-key")
         self.assertEqual(
