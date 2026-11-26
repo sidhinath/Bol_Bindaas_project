@@ -102,10 +102,7 @@ def call_ai(text: str, tone: str) -> str:
     payload = {
         "system_instruction": {"parts": [{"text": SYSTEM_PROMPT}]},
         "contents": [{"role": "user", "parts": [{"text": user_content}]}],
-        "generationConfig": {
-            "maxOutputTokens": 1200,
-            "thinkingConfig": {"thinkingLevel": "minimal"},
-        },
+        "generationConfig": {"maxOutputTokens": 1200},
     }
 
     endpoint = (
