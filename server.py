@@ -41,7 +41,7 @@ DEFAULT_MAX_ATTEMPTS = 3
 RETRY_BASE_DELAY_SECONDS = 1
 MAX_RETRY_DELAY_SECONDS = 4
 RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
-TEMPORARY_STATUS_CODES = {429, 500, 502, 503, 504}
+TEMPORARY_STATUS_CODES = {429, 403, 500, 502, 503, 504}
 
 # Provider names and the Auto order. Groq (llama-3.1-8b-instant) is primary;
 # Gemini is the automatic fallback. OpenAI/OpenRouter remain optional backups.
@@ -421,6 +421,7 @@ def call_gemini_once(
         data=body,
         headers={
             "Content-Type": "application/json",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
             "x-goog-api-key": CONFIG["key"],
         },
         method="POST",
@@ -527,6 +528,7 @@ def call_chat_once(
     endpoint = f"{base_url.rstrip('/')}/chat/completions"
     headers = {
         "Content-Type": "application/json",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
         "Authorization": f"Bearer {provider_key(provider)}",
     }
     if provider == PROVIDER_OPENROUTER:
