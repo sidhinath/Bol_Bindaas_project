@@ -189,29 +189,12 @@ async function convertToEnglish(stream) {
             tone: toneEl.value,
             provider: providerEl.value || "auto"
         };
-        if (stream) body.stream = true;
 
         const response = await fetch(API_ENDPOINT, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(body)
         });
-
-        // Check if response indicates unsupported request mode when stream=true
-        const responseClone = response.clone();
-        const errorText = await responseClone.text();
-        if (stream && errorText.includes("Unsupported request mode")) {
-            // Fallback to standard JSON mode
-            body.stream = false;
-            const retryResponse = await fetch(API_ENDPOINT, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(body)
-            });
-            // Process the retry response as standard JSON mode
-            stream = false;
-            return convertToEnglishHelper(retryResponse, stream);
-        }
 
         // Standard JSON mode (existing behaviour).
         if (!stream) {
