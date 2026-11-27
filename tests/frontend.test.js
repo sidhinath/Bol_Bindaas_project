@@ -12,6 +12,7 @@ const ELEMENT_IDS = [
   "counter",
   "tone",
   "provider",
+  "inputClearBtn",
   "convertBtn",
   "convertLabel",
   "status",
@@ -102,11 +103,19 @@ function loadApp(options = {}) {
 
   if (options.savedTheme) storage.set("theme", options.savedTheme);
 
+  const tonePills = (options.tonePills || []).map((tone) => {
+    const pill = makeElement(`tone-${tone}`);
+    pill.dataset.tone = tone;
+    pill.textContent = tone.charAt(0).toUpperCase() + tone.slice(1);
+    return pill;
+  });
+
   const document = {
     documentElement: makeElement("html"),
     body: { appendChild() {} },
     createElement: (tag) => makeElement(tag),
     getElementById: (id) => elements[id],
+    querySelectorAll: (selector) => (selector === "[data-tone]" ? tonePills : []),
   };
 
   const window = {
@@ -147,7 +156,7 @@ function loadApp(options = {}) {
   vm.createContext(sandbox);
   vm.runInContext(APP_SOURCE, sandbox, { filename: APP_PATH });
 
-  return { elements, sandbox, document, fetchCalls, storage };
+  return { elements, sandbox, document, fetchCalls, storage, tonePills };
 }
 
 async function fire(element, type, event = {}) {
@@ -174,6 +183,35 @@ test("initial UI state is reset and ready", () => {
   assert.equal(elements.micNote.hidden, false);
   assert.equal(elements.providerBadge.hidden, true);
   assert.equal(elements.providerBadge.textContent, "");
+  assert.equal(elements.tone.value, "direct");
+});
+
+test("tone pills set the selected tone and active state", async () => {
+  const { elements, tonePills } = loadApp({
+    tonePills: ["casual", "professional", "polite", "direct", "empathetic"],
+  });
+
+  assert.equal(tonePills[3].classList.contains("is-active"), true);
+  await fire(tonePills[1], "click");
+
+  assert.equal(elements.tone.value, "professional");
+  assert.equal(tonePills[1].classList.contains("is-active"), true);
+  assert.equal(tonePills[3].classList.contains("is-active"), false);
+  assert.equal(elements.status.textContent, "Professional tone selected.");
+});
+
+test("quick input clear empties the textarea without clearing the output", async () => {
+  const { elements, fetchCalls } = loadApp();
+  elements.inputText.value = "aaj mera mood thoda off hai";
+  await fire(elements.convertBtn, "click");
+  const previousOutput = elements.outputText.textContent;
+
+  await fire(elements.inputClearBtn, "click");
+
+  assert.equal(elements.inputText.value, "");
+  assert.equal(elements.counter.textContent, "0 / 4000");
+  assert.equal(elements.outputText.textContent, previousOutput);
+  assert.equal(fetchCalls.length, 1);
 });
 
 test("empty input shows a validation error and does not call the API", async () => {
@@ -197,7 +235,7 @@ test("successful conversion posts trimmed text and tone, then shows English", as
     }),
   });
   elements.inputText.value = "  aaj mera mood thoda off hai  ";
-  elements.tone.value = "formal";
+  elements.tone.value = "professional";
 
   await fire(elements.convertBtn, "click");
 
@@ -207,7 +245,7 @@ test("successful conversion posts trimmed text and tone, then shows English", as
   assert.equal(fetchCalls[0].init.headers["Content-Type"], "application/json");
   assert.deepEqual(JSON.parse(fetchCalls[0].init.body), {
     text: "aaj mera mood thoda off hai",
-    tone: "formal",
+    tone: "professional",
     provider: "auto",
   });
 

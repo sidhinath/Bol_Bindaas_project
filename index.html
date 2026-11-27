@@ -5,149 +5,162 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="application-name" content="BolBindaas">
     <meta name="description" content="BolBindaas turns your Hinglish thoughts into clean, natural English. Type or speak your mann ki baat and rewrite it with the right tone.">
-    <meta property="og:title" content="BolBindaas — Hinglish to English Thought Writer">
-    <meta property="og:description" content="Say it in Hinglish. BolBindaas writes it in natural English, keeping your meaning, emotion, and tone.">
+    <meta property="og:title" content="BolBindaas — Say it in Hinglish. Write it in English.">
+    <meta property="og:description" content="A focused AI writing workspace that turns Hinglish into natural, well-written English.">
     <meta property="og:url" content="https://github.com/sidhinath/Bol_Bindaas_project">
     <meta name="twitter:card" content="summary">
-    <meta name="twitter:title" content="BolBindaas — Hinglish to English Thought Writer">
-    <meta name="twitter:description" content="Say it in Hinglish. BolBindaas writes it in natural English, keeping your meaning, emotion, and tone.">
-    <title>BolBindaas — Hinglish to English Thought Writer</title>
+    <meta name="twitter:title" content="BolBindaas — Say it in Hinglish. Write it in English.">
+    <meta name="twitter:description" content="A focused AI writing workspace that turns Hinglish into natural, well-written English.">
+    <title>BolBindaas — Say it in Hinglish. Write it in English.</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Ctext y=%22.9em%22 font-size=%2290%22%3E%E2%9C%8D%EF%B8%8F%3C/text%3E%3C/svg%3E">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="page">
-        <div class="topbar">
+    <div class="app-shell">
+        <header class="app-header">
             <div class="brand">
                 <span class="brand__mark" aria-hidden="true">B</span>
-                <span>BolBindaas</span>
+                <div class="brand__copy">
+                    <span class="brand__name">BolBindaas</span>
+                    <span class="brand__subtitle">Say it in Hinglish. Write it in English.</span>
+                </div>
             </div>
-            <button class="theme-toggle" id="themeToggle" type="button" aria-label="Switch color theme">
-                <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-                    <circle cx="12" cy="12" r="4"></circle>
-                    <path d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4l1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path>
-                </svg>
-                <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"></path>
-                </svg>
-            </button>
-        </div>
 
-        <header class="hero">
-            <span class="eyebrow">Mann ki baat, clearly written</span>
-            <h1><span>BolBindaas</span></h1>
-            <p class="tagline">Say it in Hinglish. Write it in English.</p>
-            <p class="intro">Type or speak whatever is on your mind. BolBindaas turns it into natural, well-written English — keeping your meaning, emotion, and tone intact.</p>
-        </header>
-
-        <main class="workspace">
-            <!-- Input side -->
-            <section class="panel" aria-labelledby="input-heading">
-                <div class="panel__head">
-                    <div class="panel__title">
-                        <span class="panel__step">01</span>
-                        <h2 id="input-heading">Your thought</h2>
-                    </div>
-                    <span class="counter" id="counter">0 / 4000</span>
-                </div>
-
-                <div class="editor">
-                    <textarea id="inputText" maxlength="4000" rows="9" spellcheck="false" aria-label="Write your thought in Hinglish" placeholder="Jaise: aaj mera mood thoda off hai, kuch samajh nahi aa raha kya karun..."></textarea>
-                    <div class="editor__toolbar">
-                        <button class="mic" id="micBtn" type="button" aria-pressed="false">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                <rect x="9" y="2" width="6" height="12" rx="3"></rect>
-                                <path d="M5 11a7 7 0 0 0 14 0M12 18v4"></path>
-                            </svg>
-                            <span id="micLabel">Speak</span>
-                        </button>
-                        <span class="mic-note" id="micNote" hidden>Voice input isn't supported in this browser. Typing works perfectly.</span>
-                        <span class="listening" id="listening" hidden>
-                            <span class="listening__dot" aria-hidden="true"></span>Listening...
-                        </span>
-                    </div>
-                </div>
-
-                <div class="tone-row">
-                    <label for="tone">Tone</label>
-                    <div class="select-wrap">
-                        <select id="tone">
-                            <option value="normal">Normal</option>
-                            <option value="formal">Formal</option>
-                            <option value="casual">Casual</option>
-                            <option value="poetic">Poetic</option>
-                        </select>
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                            <path d="m6 9 6 6 6-6"></path>
-                        </svg>
-                    </div>
-                </div>
-
-                <div class="tone-row">
-                    <label for="provider">AI provider</label>
-                    <div class="select-wrap">
-                        <select id="provider">
-                            <option value="auto">Auto (recommended)</option>
+            <div class="header-actions">
+                <label class="provider-control" for="provider">
+                    <span class="provider-control__label">AI</span>
+                    <span class="select-wrap">
+                        <select id="provider" aria-label="AI provider">
+                            <option value="auto">Auto</option>
                             <option value="gemini">Gemini</option>
-                            <option value="openai">OpenAI</option>
                             <option value="groq">Groq</option>
+                            <option value="openai">OpenAI</option>
                             <option value="openrouter">OpenRouter</option>
                         </select>
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                             <path d="m6 9 6 6 6-6"></path>
                         </svg>
-                    </div>
-                </div>
+                    </span>
+                </label>
 
-                <button class="btn btn--primary" id="convertBtn" type="button">
-                    <svg class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                        <path d="m12 3 1.8 4.2L18 9l-4.2 1.8L12 15l-1.8-4.2L6 9l4.2-1.8L12 3Z"></path>
-                        <path d="M19 15l.8 1.8L21.5 18l-1.7.8L19 20.5l-.8-1.7-1.7-.8 1.7-.8L19 15Z"></path>
+                <button class="theme-toggle" id="themeToggle" type="button" aria-label="Switch color theme">
+                    <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                        <circle cx="12" cy="12" r="4"></circle>
+                        <path d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4l1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path>
                     </svg>
-                    <span id="convertLabel">Convert to English</span>
+                    <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"></path>
+                    </svg>
                 </button>
+            </div>
+        </header>
 
-                <p class="status" id="status" role="status" aria-live="polite">Ready when you are.</p>
-            </section>
+        <main class="workspace">
+            <section class="workspace-card" aria-label="Translation workspace">
+                <div class="editor-split">
+                    <!-- Input pane -->
+                    <section class="pane pane--input" aria-labelledby="input-heading">
+                        <div class="pane__head">
+                            <div class="pane__title">
+                                <span class="pane__step">01</span>
+                                <h2 id="input-heading">Your thought</h2>
+                            </div>
+                            <span class="counter" id="counter">0 / 4000</span>
+                        </div>
 
-            <!-- Output side -->
-            <section class="panel panel--output" id="outputCard" aria-labelledby="output-heading">
-                <div class="panel__head">
-                    <div class="panel__title">
-                        <span class="panel__step">02</span>
-                        <h2 id="output-heading">English version</h2>
-                    </div>
-                    <span class="provider-badge" id="providerBadge" hidden></span>
+                        <div class="tone-pills" role="group" aria-label="Tone">
+                            <button class="tone-pill" type="button" data-tone="casual">Casual</button>
+                            <button class="tone-pill" type="button" data-tone="professional">Professional</button>
+                            <button class="tone-pill" type="button" data-tone="polite">Polite</button>
+                            <button class="tone-pill" type="button" data-tone="direct">Direct</button>
+                            <button class="tone-pill" type="button" data-tone="empathetic">Empathetic</button>
+                            <input type="hidden" id="tone" value="direct">
+                        </div>
+
+                        <label class="sr-only" for="inputText">Write your thought in Hinglish</label>
+                        <textarea id="inputText" maxlength="4000" rows="10" spellcheck="false" placeholder="Jaise: aaj mera mood thoda off hai, kuch samajh nahi aa raha kya karun..."></textarea>
+
+                        <div class="pane__footer">
+                            <div class="voice-actions">
+                                <button class="icon-btn" id="micBtn" type="button" aria-pressed="false">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                        <rect x="9" y="2" width="6" height="12" rx="3"></rect>
+                                        <path d="M5 11a7 7 0 0 0 14 0M12 18v4"></path>
+                                    </svg>
+                                    <span id="micLabel">Speak</span>
+                                </button>
+                                <button class="icon-btn icon-btn--square" id="inputClearBtn" type="button" aria-label="Clear input">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                        <path d="M18 6 6 18M6 6l12 12"></path>
+                                    </svg>
+                                </button>
+                                <span class="mic-note" id="micNote" hidden>Voice input isn't supported here. Typing works perfectly.</span>
+                                <span class="listening" id="listening" hidden>
+                                    <span class="listening__dot" aria-hidden="true"></span>Listening...
+                                </span>
+                            </div>
+                        </div>
+                    </section>
+
+                    <div class="pane-divider" aria-hidden="true"></div>
+
+                    <!-- Output pane -->
+                    <section class="pane pane--output" id="outputCard" aria-labelledby="output-heading">
+                        <div class="pane__head">
+                            <div class="pane__title">
+                                <span class="pane__step">02</span>
+                                <h2 id="output-heading">English version</h2>
+                            </div>
+                            <span class="provider-badge" id="providerBadge" hidden></span>
+                        </div>
+
+                        <div class="output-box">
+                            <div class="skeleton" aria-hidden="true">
+                                <span></span><span></span><span></span>
+                            </div>
+                            <p class="output-text is-placeholder" id="outputText">Your clean, natural English will appear here.</p>
+                        </div>
+
+                        <p class="status output-status" id="outputStatus" role="status" aria-live="polite"></p>
+
+                        <div class="output-actions">
+                            <button class="action-btn" id="copyBtn" type="button" disabled>
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <rect x="9" y="9" width="12" height="12" rx="2"></rect>
+                                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                </svg>
+                                Copy
+                            </button>
+                            <button class="action-btn" id="listenBtn" type="button" disabled>
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <path d="M11 5 6 9H2v6h4l5 4V5Z"></path>
+                                    <path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"></path>
+                                </svg>
+                                Listen
+                            </button>
+                            <button class="action-btn" id="clearBtn" type="button" disabled>
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <path d="M21 12a9 9 0 1 1-2.6-6.4"></path>
+                                    <path d="M21 3v6h-6"></path>
+                                </svg>
+                                Clear / New
+                            </button>
+                        </div>
+                    </section>
                 </div>
 
-                <div class="output-box">
-                    <p class="output-text is-placeholder" id="outputText">Your clean, natural English will appear here.</p>
-                </div>
-
-                <p class="status output-status" id="outputStatus" role="status" aria-live="polite"></p>
-
-                <div class="output-actions">
-                    <button class="btn btn--ghost" id="copyBtn" type="button" disabled>
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                            <rect x="9" y="9" width="12" height="12" rx="2"></rect>
-                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                <div class="workspace-footer">
+                    <button class="btn btn--primary" id="convertBtn" type="button">
+                        <svg class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="m12 3 1.8 4.2L18 9l-4.2 1.8L12 15l-1.8-4.2L6 9l4.2-1.8L12 3Z"></path>
+                            <path d="M19 15l.8 1.8L21.5 18l-1.7.8L19 20.5l-.8-1.7-1.7-.8 1.7-.8L19 15Z"></path>
                         </svg>
-                        Copy
+                        <span id="convertLabel">Convert to English</span>
                     </button>
-                    <button class="btn btn--ghost" id="listenBtn" type="button" disabled>
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                            <path d="M11 5 6 9H2v6h4l5 4V5Z"></path>
-                            <path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"></path>
-                        </svg>
-                        Listen
-                    </button>
-                    <button class="btn btn--ghost" id="clearBtn" type="button" disabled>
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                            <path d="M21 12a9 9 0 1 1-2.6-6.4"></path>
-                            <path d="M21 3v6h-6"></path>
-                        </svg>
-                        Clear / New
-                    </button>
+                    <p class="status" id="status" role="status" aria-live="polite">Ready when you are.</p>
                 </div>
             </section>
         </main>

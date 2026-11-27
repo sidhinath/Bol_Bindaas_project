@@ -104,7 +104,17 @@ SYSTEM_PROMPT = (
     "quotes, or preamble."
 )
 
-ALLOWED_TONES = {"normal", "formal", "casual", "poetic"}
+# New UI pills map to these values; legacy values stay valid for old clients.
+ALLOWED_TONES = {
+    "casual",
+    "professional",
+    "polite",
+    "direct",
+    "empathetic",
+    "normal",
+    "formal",
+    "poetic",
+}
 CONFIG = {
     # Legacy Gemini-only fields are kept so existing deployments/tests work.
     "key": "",
@@ -672,8 +682,9 @@ def extract_chat_content(data: dict, provider: str, overall_started: float) -> s
 
 def build_payload(provider: str, text: str, tone: str) -> dict:
     """Build the same translation instruction in each provider's format."""
-    # The tone is an instruction layered on top of the fixed system prompt.
-    user_content = text if tone == "normal" else f"Tone: {tone}\n\nText: {text}"
+    # "normal" and "direct" are the default translation behavior; only add a
+    # tone instruction when the user asks for a distinct style.
+    user_content = text if tone in {"normal", "direct"} else f"Tone: {tone}\n\nText: {text}"
 
     if provider == PROVIDER_GEMINI:
         return {

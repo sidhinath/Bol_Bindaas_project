@@ -3,6 +3,7 @@
 
 const API_ENDPOINT = "/api/convert";
 const MAX_CHARS = 4000;
+const DEFAULT_TONE = "direct";
 const PLACEHOLDER = "Your clean, natural English will appear here.";
 const PROVIDER_LABELS = {
     gemini: "Gemini",
@@ -19,6 +20,7 @@ const convertBtn = document.getElementById("convertBtn");
 const convertLabel = document.getElementById("convertLabel");
 const statusEl = document.getElementById("status");
 
+const inputClearBtn = document.getElementById("inputClearBtn");
 const micBtn = document.getElementById("micBtn");
 const micLabel = document.getElementById("micLabel");
 const micNote = document.getElementById("micNote");
@@ -94,6 +96,33 @@ function stopBusyFeedback() {
 
 function elapsedSeconds() {
     return ((Date.now() - requestStartedAt) / 1000).toFixed(1);
+}
+
+function setupTonePills() {
+    if (!toneEl.value) toneEl.value = DEFAULT_TONE;
+
+    const pills = typeof document.querySelectorAll === "function"
+        ? document.querySelectorAll("[data-tone]")
+        : [];
+
+    pills.forEach((pill) => {
+        if (pill.dataset.tone === toneEl.value) pill.classList.add("is-active");
+        pill.addEventListener("click", () => {
+            toneEl.value = pill.dataset.tone;
+            pills.forEach((other) => other.classList.toggle("is-active", other === pill));
+            setStatus(`${pill.textContent.trim()} tone selected.`, "idle");
+        });
+    });
+}
+
+function clearInput() {
+    if (listening && recognition) recognition.stop();
+    inputEl.value = "";
+    baseText = "";
+    finalTranscript = "";
+    updateCounter();
+    setStatus("Input cleared. Ready to write again.", "idle");
+    inputEl.focus();
 }
 
 function clearOutput() {
@@ -382,10 +411,12 @@ inputEl.addEventListener("keydown", (event) => {
     if ((event.ctrlKey || event.metaKey) && event.key === "Enter") convertToEnglish();
 });
 convertBtn.addEventListener("click", convertToEnglish);
+inputClearBtn.addEventListener("click", clearInput);
 copyBtn.addEventListener("click", copyOutput);
 listenBtn.addEventListener("click", listenOutput);
 clearBtn.addEventListener("click", clearAll);
 
+setupTonePills();
 setupSpeechRecognition();
 clearOutput();
 updateCounter();

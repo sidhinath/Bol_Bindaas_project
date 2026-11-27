@@ -1284,6 +1284,16 @@ class HandlerIntegrationTests(unittest.TestCase):
         self.assertIn("Please enter some Hinglish text", json.loads(body)["error"])
         self.assertEqual(len(MockGeminiHandler.requests), 0)
 
+    def test_new_ui_tones_are_accepted(self):
+        for tone in ("casual", "professional", "polite", "direct", "empathetic"):
+            with self.subTest(tone=tone):
+                status, body = self.send_request(
+                    "/api/convert",
+                    method="POST",
+                    payload={"text": "test", "tone": tone},
+                )
+                self.assertEqual(status, 200, body)
+
     def test_invalid_tone_is_rejected(self):
         status, body = self.send_request(
             "/api/convert", method="POST", payload={"text": "test", "tone": "angry"}

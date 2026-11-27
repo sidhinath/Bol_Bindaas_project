@@ -17,7 +17,9 @@ BolBindaas converts Hinglish (Hindi in Roman English) into clean, natural Englis
 - Automatic retries with exponential backoff; OpenAI and OpenRouter are available as optional extra backups
 - Provider selection dropdown: Auto (recommended), Gemini, Groq, OpenAI, OpenRouter
 - Response badge shows “Powered by Gemini” or “Powered by Groq” so you know who answered
-- Tone selector: Normal, Formal, Casual, Poetic
+- Quick tone pills: Casual, Professional, Polite, Direct (default), Empathetic
+- Unified split-pane editor with 1px divider, live character count, voice input, and per-pane clear controls
+- Loading skeleton and “Powered by …” attribution in the output pane
 - Copy output to clipboard
 - Listen to output with text-to-speech (`en-US`)
 - Clear / New reset
@@ -26,11 +28,15 @@ BolBindaas converts Hinglish (Hindi in Roman English) into clean, natural Englis
 
 ## How it works
 
-1. User types or speaks in Hinglish and picks a tone and provider.
+1. User types or speaks in Hinglish, picks a tone pill and provider, then converts.
 2. Browser sends `POST /api/convert` with the text, tone, and provider choice.
 3. `server.py` tries Gemini first. On 429, 503, timeout, or network error it switches to Groq (then any optional extra backups).
 4. The response returns `{ "text": "...", "provider": "gemini" }`; the UI shows the English output and a “Powered by Gemini” / “Powered by Groq” badge.
 5. Copy, Listen, and Clear actions work the same regardless of provider.
+
+## Interface
+
+The app is a focused AI writing workspace with a compact header and a wide (up to 1180px) split-pane editor. The left pane holds the Hinglish textarea, tone pills, live `0 / 4000` counter, Speak button, and a quick Clear icon. The right pane shows the English output, a subtle loading skeleton while generating, the provider badge, and Copy / Listen / Clear / New actions. Input and output text use Inter at 18px with relaxed line height; labels and buttons stay at 14px or larger. On mobile the panes stack with a horizontal divider. Light and dark themes use the same deep-slate/indigo visual language.
 
 ## Tech stack
 
@@ -169,7 +175,7 @@ The backend tests mock Gemini and the OpenAI-compatible endpoints locally, so re
 - In Auto mode, a temporary Gemini failure switches immediately to Groq instead of waiting through a full retry cycle.
 - Sends a compact instruction with no filler and caps output at 1024 tokens; full payload logging is opt-in via `AI_DEBUG=1`.
 - Logs `/api/convert` total time and Gemini time in milliseconds, and returns `Server-Timing` / `X-Response-Time-Ms` response headers.
-- The button shows elapsed time while converting, and the output panel has an animated loading indicator.
+- The button shows elapsed time while converting, and the output pane has an animated skeleton state.
 
 ## Deployment
 
@@ -191,8 +197,8 @@ Deploy as a Python web service on Render:
 
 | Hinglish input | Tone | English output |
 | --- | --- | --- |
-| `aaj mera mood thoda off hai` | Normal | Today I am feeling a little low. |
-| `sir, main report aaj shaam tak bhej dunga` | Formal | Sir, I will send the report by this evening. |
+| `aaj mera mood thoda off hai` | Direct | Today I am feeling a little low. |
+| `sir, main report aaj shaam tak bhej dunga` | Polite | Sir, I will send the report by this evening. |
 | `yaar plan cancel ho gaya` | Casual | The plan got cancelled, man. |
 
 ## Limitations
