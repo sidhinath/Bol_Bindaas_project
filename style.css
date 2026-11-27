@@ -1,41 +1,37 @@
-/* BolBindaas — a focused, high-end writing workspace. */
+/* BolBindaas — pure CSS, no framework required. */
 
 :root {
     color-scheme: dark;
     --bg: #090D16;
     --surface: #111827;
-    --surface-soft: #0D1421;
-    --surface-hover: rgba(255, 255, 255, 0.045);
+    --surface-raised: #121B2B;
     --border: rgba(255, 255, 255, 0.08);
     --border-strong: rgba(255, 255, 255, 0.16);
     --text: #F8FAFC;
     --muted: #94A3B8;
-    --accent: #818CF8;
-    --accent-2: #A78BFA;
-    --accent-soft: rgba(129, 140, 248, 0.14);
+    --accent: #8B5CF6;
+    --accent-soft: rgba(139, 92, 246, 0.16);
     --success: #34D399;
     --error: #F87171;
     --warning: #FBBF24;
-    --shadow: 0 28px 70px rgba(0, 0, 0, 0.45);
+    --shadow: 0 24px 60px rgba(0, 0, 0, 0.38);
 }
 
 :root[data-theme="light"] {
     color-scheme: light;
     --bg: #F4F6FB;
     --surface: #FFFFFF;
-    --surface-soft: #F8FAFC;
-    --surface-hover: rgba(15, 23, 42, 0.04);
+    --surface-raised: #F8FAFC;
     --border: rgba(15, 23, 42, 0.10);
-    --border-strong: rgba(15, 23, 42, 0.18);
+    --border-strong: rgba(15, 23, 42, 0.20);
     --text: #0F172A;
     --muted: #64748B;
-    --accent: #4F46E5;
-    --accent-2: #7C3AED;
-    --accent-soft: rgba(79, 70, 229, 0.10);
+    --accent: #7C3AED;
+    --accent-soft: rgba(124, 58, 237, 0.12);
     --success: #059669;
     --error: #DC2626;
     --warning: #B45309;
-    --shadow: 0 24px 60px rgba(15, 23, 42, 0.10);
+    --shadow: 0 20px 50px rgba(15, 23, 42, 0.10);
 }
 
 * {
@@ -51,12 +47,10 @@ body {
 body {
     background: var(--bg);
     color: var(--text);
-    font-family: Inter, "Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system,
-        "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    font-size: 1rem;
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 16px;
     line-height: 1.6;
     -webkit-font-smoothing: antialiased;
-    text-rendering: optimizeLegibility;
 }
 
 button,
@@ -67,6 +61,14 @@ textarea {
 
 button {
     cursor: pointer;
+}
+
+/* Every icon in the app has one predictable size. */
+svg {
+    width: 18px;
+    height: 18px;
+    flex: 0 0 auto;
+    display: block;
 }
 
 button:focus-visible,
@@ -88,24 +90,24 @@ textarea:focus-visible {
     border: 0;
 }
 
+/* ---------- Shell and compact header ---------- */
+
 .app-shell {
-    display: flex;
-    flex-direction: column;
     width: 100%;
     max-width: 1180px;
-    min-height: 100vh;
     margin: 0 auto;
-    padding: 20px 24px 16px;
+    padding: 20px 16px 16px;
 }
-
-/* ---------- Compact header ---------- */
 
 .app-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 18px;
-    padding: 6px 2px 20px;
+    gap: 16px;
+    width: 100%;
+    max-width: 1150px;
+    margin: 0 auto 18px;
+    padding: 4px 2px;
 }
 
 .brand {
@@ -118,15 +120,14 @@ textarea:focus-visible {
 .brand__mark {
     display: grid;
     place-items: center;
-    flex: 0 0 auto;
     width: 38px;
     height: 38px;
+    flex: 0 0 auto;
     border-radius: 11px;
     background: linear-gradient(135deg, #4F46E5, #8B5CF6);
-    color: #fff;
-    font-size: 1.1rem;
+    color: #FFFFFF;
+    font-size: 18px;
     font-weight: 700;
-    box-shadow: 0 8px 24px rgba(99, 102, 241, 0.3);
 }
 
 .brand__copy {
@@ -137,7 +138,7 @@ textarea:focus-visible {
 }
 
 .brand__name {
-    font-size: 1.1rem;
+    font-size: 18px;
     font-weight: 700;
     letter-spacing: -0.02em;
     white-space: nowrap;
@@ -145,7 +146,7 @@ textarea:focus-visible {
 
 .brand__subtitle {
     color: var(--muted);
-    font-size: 0.875rem;
+    font-size: 14px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -162,7 +163,7 @@ textarea:focus-visible {
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    padding: 5px 6px 5px 11px;
+    padding: 5px 8px 5px 12px;
     border: 1px solid var(--border);
     border-radius: 10px;
     background: var(--surface);
@@ -170,7 +171,7 @@ textarea:focus-visible {
 
 .provider-control__label {
     color: var(--muted);
-    font-size: 0.875rem;
+    font-size: 14px;
     font-weight: 600;
 }
 
@@ -185,8 +186,8 @@ textarea:focus-visible {
     border: 0;
     background: transparent;
     color: var(--text);
-    padding: 4px 24px 4px 2px;
-    font-size: 0.875rem;
+    padding: 5px 26px 5px 2px;
+    font-size: 14px;
     font-weight: 600;
     cursor: pointer;
 }
@@ -199,8 +200,6 @@ textarea:focus-visible {
 .select-wrap svg {
     position: absolute;
     right: 2px;
-    width: 16px;
-    height: 16px;
     color: var(--muted);
     pointer-events: none;
 }
@@ -210,11 +209,11 @@ textarea:focus-visible {
     place-items: center;
     width: 38px;
     height: 38px;
+    padding: 0;
     border: 1px solid var(--border);
     border-radius: 10px;
     background: var(--surface);
     color: var(--muted);
-    transition: border-color 0.18s ease, color 0.18s ease;
 }
 
 .theme-toggle:hover {
@@ -222,25 +221,28 @@ textarea:focus-visible {
     color: var(--text);
 }
 
-.theme-toggle svg {
-    width: 18px;
-    height: 18px;
-}
-
-.theme-toggle .icon-sun,
-:root[data-theme="dark"] .theme-toggle .icon-moon {
+.theme-toggle .icon-sun {
     display: none;
 }
 
-.theme-toggle .icon-moon,
+.theme-toggle .icon-moon {
+    display: block;
+}
+
 :root[data-theme="light"] .theme-toggle .icon-sun {
     display: block;
 }
 
-/* ---------- Split-pane workspace ---------- */
+:root[data-theme="light"] .theme-toggle .icon-moon {
+    display: none;
+}
+
+/* ---------- Centered workspace and 2-column split ---------- */
 
 .workspace {
-    flex: 1;
+    width: 100%;
+    max-width: 1150px;
+    margin: 0 auto;
 }
 
 .workspace-card {
@@ -252,12 +254,27 @@ textarea:focus-visible {
 }
 
 .editor-split {
+    position: relative;
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 1px minmax(0, 1fr);
+    grid-template-columns: 1fr 1fr;
+    align-items: stretch;
+}
+
+/* Simple fallback for browsers without modern grid shorthand support. */
+@supports not (grid-template-columns: 1fr 1fr) {
+    .editor-split {
+        grid-template-columns: minmax(0, 1fr) 1px minmax(0, 1fr);
+    }
 }
 
 .pane-divider {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    width: 1px;
     background: var(--border);
+    pointer-events: none;
 }
 
 .pane {
@@ -272,7 +289,7 @@ textarea:focus-visible {
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    margin-bottom: 18px;
+    margin-bottom: 16px;
 }
 
 .pane__title {
@@ -289,78 +306,79 @@ textarea:focus-visible {
     border-radius: 8px;
     background: var(--accent-soft);
     color: var(--accent);
-    font-size: 0.875rem;
+    font-size: 14px;
     font-weight: 700;
 }
 
 .pane h2 {
     margin: 0;
-    font-size: 1rem;
+    font-size: 18px;
     font-weight: 600;
     letter-spacing: -0.01em;
 }
 
 .counter {
     color: var(--muted);
-    font-size: 0.875rem;
+    font-size: 14px;
     font-variant-numeric: tabular-nums;
 }
 
-/* Tone pills */
+/* ---------- Tone pills ---------- */
 
 .tone-pills {
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
-    margin-bottom: 14px;
+    margin-bottom: 16px;
 }
 
 .tone-pill {
-    padding: 7px 13px;
+    padding: 8px 14px;
     border: 1px solid var(--border);
     border-radius: 999px;
     background: transparent;
     color: var(--muted);
-    font-size: 0.875rem;
+    font-size: 14px;
     font-weight: 600;
-    transition: color 0.16s ease, border-color 0.16s ease, background 0.16s ease;
+    line-height: 1.4;
+    transition: border-color 0.18s ease, background 0.18s ease, color 0.18s ease;
 }
 
 .tone-pill:hover {
-    color: var(--text);
     border-color: var(--border-strong);
+    color: var(--text);
 }
 
 .tone-pill.is-active {
-    border-color: rgba(129, 140, 248, 0.55);
+    border-color: var(--accent);
     background: var(--accent-soft);
     color: var(--text);
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.10);
 }
 
-/* Text areas */
+/* ---------- Input and output boxes ---------- */
 
 #inputText,
 .output-box {
     width: 100%;
-    min-height: 300px;
+    min-height: 220px;
+    padding: 18px;
     border: 1px solid var(--border);
     border-radius: 14px;
-    background: var(--surface-soft);
-    transition: border-color 0.18s ease, box-shadow 0.18s ease;
+    background: #111827;
+    color: #F8FAFC;
+    font-size: 1.125rem; /* 18px */
+    line-height: 1.7;
 }
 
 #inputText {
     display: block;
-    padding: 18px;
-    color: var(--text);
-    font-size: 1.125rem;
-    line-height: 1.75;
     resize: vertical;
 }
 
 #inputText::placeholder {
-    color: var(--muted);
-    opacity: 0.8;
+    color: #94A3B8;
+    opacity: 0.85;
 }
 
 #inputText:focus {
@@ -368,6 +386,57 @@ textarea:focus-visible {
     border-color: var(--accent);
     box-shadow: 0 0 0 3px var(--accent-soft);
 }
+
+.output-box {
+    position: relative;
+    overflow: hidden;
+}
+
+.output-text {
+    position: relative;
+    z-index: 1;
+    margin: 0;
+    color: #F8FAFC;
+    font-size: 18px;
+    line-height: 1.7;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    transition: opacity 0.2s ease;
+}
+
+.output-text.is-placeholder {
+    color: #94A3B8;
+}
+
+.pane--output.is-loading .output-text {
+    opacity: 0.18;
+}
+
+.skeleton {
+    position: absolute;
+    inset: 18px;
+    display: none;
+    flex-direction: column;
+    gap: 14px;
+    z-index: 0;
+}
+
+.pane--output.is-loading .skeleton {
+    display: flex;
+}
+
+.skeleton span {
+    display: block;
+    height: 14px;
+    border-radius: 6px;
+    background: linear-gradient(90deg, rgba(148, 163, 184, 0.08), rgba(148, 163, 184, 0.28), rgba(148, 163, 184, 0.08));
+    background-size: 200% 100%;
+    animation: shimmer 1.3s linear infinite;
+}
+
+.skeleton span:nth-child(1) { width: 92%; }
+.skeleton span:nth-child(2) { width: 74%; }
+.skeleton span:nth-child(3) { width: 56%; }
 
 .pane__footer {
     margin-top: 14px;
@@ -379,31 +448,25 @@ textarea:focus-visible {
     flex-wrap: wrap;
     gap: 8px;
     color: var(--muted);
-    font-size: 0.875rem;
+    font-size: 14px;
 }
 
 .icon-btn {
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    padding: 9px 13px;
+    padding: 9px 12px;
     border: 1px solid var(--border);
     border-radius: 10px;
     background: rgba(255, 255, 255, 0.02);
     color: var(--text);
-    font-size: 0.875rem;
+    font-size: 14px;
     font-weight: 600;
-    transition: border-color 0.18s ease, background 0.18s ease;
 }
 
 .icon-btn:hover {
     border-color: var(--border-strong);
-    background: var(--surface-hover);
-}
-
-.icon-btn svg {
-    width: 18px;
-    height: 18px;
+    background: rgba(255, 255, 255, 0.06);
 }
 
 .icon-btn--square {
@@ -411,7 +474,7 @@ textarea:focus-visible {
 }
 
 .icon-btn.is-listening {
-    border-color: rgba(129, 140, 248, 0.6);
+    border-color: var(--accent);
     background: var(--accent-soft);
     color: var(--accent);
 }
@@ -430,64 +493,7 @@ textarea:focus-visible {
     animation: pulse 1.2s ease-in-out infinite;
 }
 
-/* Output */
-
-.output-box {
-    position: relative;
-    padding: 18px;
-    overflow: hidden;
-}
-
-.output-text {
-    position: relative;
-    z-index: 1;
-    margin: 0;
-    color: var(--text);
-    font-size: 1.125rem;
-    line-height: 1.75;
-    white-space: pre-wrap;
-    overflow-wrap: anywhere;
-    transition: opacity 0.2s ease;
-}
-
-.output-text.is-placeholder {
-    color: var(--muted);
-}
-
-.pane--output.is-loading .output-text {
-    opacity: 0.16;
-}
-
-.skeleton {
-    position: absolute;
-    inset: 18px;
-    display: none;
-    flex-direction: column;
-    gap: 14px;
-    z-index: 0;
-}
-
-.pane--output.is-loading .skeleton {
-    display: flex;
-}
-
-.skeleton span {
-    display: block;
-    height: 15px;
-    border-radius: 6px;
-    background: linear-gradient(
-        90deg,
-        var(--surface-hover) 0%,
-        rgba(148, 163, 184, 0.22) 50%,
-        var(--surface-hover) 100%
-    );
-    background-size: 200% 100%;
-    animation: shimmer 1.3s linear infinite;
-}
-
-.skeleton span:nth-child(1) { width: 92%; }
-.skeleton span:nth-child(2) { width: 74%; }
-.skeleton span:nth-child(3) { width: 56%; }
+/* ---------- Output actions and status ---------- */
 
 .provider-badge {
     margin-left: auto;
@@ -495,7 +501,7 @@ textarea:focus-visible {
     border-radius: 999px;
     background: var(--accent-soft);
     color: var(--accent);
-    font-size: 0.875rem;
+    font-size: 14px;
     font-weight: 600;
     white-space: nowrap;
 }
@@ -507,7 +513,7 @@ textarea:focus-visible {
 .status {
     margin: 0;
     color: var(--muted);
-    font-size: 0.875rem;
+    font-size: 14px;
     line-height: 1.5;
 }
 
@@ -533,33 +539,27 @@ textarea:focus-visible {
     align-items: center;
     justify-content: center;
     gap: 8px;
-    padding: 10px 14px;
+    padding: 10px 13px;
     border: 1px solid var(--border);
     border-radius: 10px;
     background: rgba(255, 255, 255, 0.02);
     color: var(--text);
-    font-size: 0.875rem;
+    font-size: 14px;
     font-weight: 600;
-    transition: border-color 0.18s ease, background 0.18s ease;
-}
-
-.action-btn svg {
-    width: 17px;
-    height: 17px;
 }
 
 .action-btn:hover:not(:disabled) {
     border-color: var(--border-strong);
-    background: var(--surface-hover);
+    background: rgba(255, 255, 255, 0.06);
 }
 
 .action-btn:disabled {
-    opacity: 0.42;
+    opacity: 0.45;
     cursor: not-allowed;
 }
 
 .action-btn.is-active {
-    border-color: rgba(129, 140, 248, 0.6);
+    border-color: var(--accent);
     background: var(--accent-soft);
     color: var(--accent);
 }
@@ -576,7 +576,7 @@ textarea:focus-visible {
 
 .btn--primary {
     position: relative;
-    display: inline-flex;
+    display: flex;
     align-items: center;
     justify-content: center;
     gap: 10px;
@@ -586,17 +586,16 @@ textarea:focus-visible {
     border: 0;
     border-radius: 12px;
     background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%);
-    color: #fff;
-    font-size: 1rem;
+    color: #FFFFFF;
+    font-size: 16px;
     font-weight: 700;
-    letter-spacing: -0.01em;
-    box-shadow: 0 12px 30px rgba(99, 102, 241, 0.28);
+    box-shadow: 0 12px 30px rgba(139, 92, 246, 0.28);
     transition: transform 0.18s ease, box-shadow 0.18s ease;
 }
 
 .btn--primary:hover:not(:disabled) {
     transform: translateY(-1px);
-    box-shadow: 0 16px 40px rgba(124, 58, 237, 0.45);
+    box-shadow: 0 16px 40px rgba(139, 92, 246, 0.46);
 }
 
 .btn--primary:disabled {
@@ -604,28 +603,26 @@ textarea:focus-visible {
     cursor: wait;
 }
 
-.btn__icon {
-    width: 20px;
-    height: 20px;
-}
-
 .btn--primary.is-busy::after {
     content: "";
     position: absolute;
     inset: 0;
-    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.24), transparent);
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.22), transparent);
     background-size: 200% 100%;
     animation: shimmer 1.2s linear infinite;
 }
 
 .site-footer {
+    width: 100%;
+    max-width: 1150px;
+    margin: 0 auto;
     padding: 18px 0 6px;
     color: var(--muted);
-    font-size: 0.875rem;
+    font-size: 14px;
     text-align: center;
 }
 
-/* ---------- Motion ---------- */
+/* ---------- Motion and responsive stacking ---------- */
 
 @keyframes pulse {
     50% { opacity: 0.35; transform: scale(0.75); }
@@ -645,33 +642,35 @@ textarea:focus-visible {
     }
 }
 
-/* ---------- Responsive ---------- */
-
-@media (max-width: 900px) {
+@media (max-width: 860px) {
     .editor-split {
-        grid-template-columns: minmax(0, 1fr);
+        grid-template-columns: 1fr;
     }
 
     .pane-divider {
-        height: 1px;
+        display: none;
+    }
+
+    .pane--input {
+        border-bottom: 1px solid var(--border);
     }
 
     #inputText,
     .output-box {
-        min-height: 240px;
+        min-height: 220px;
     }
 }
 
 @media (max-width: 620px) {
     .app-shell {
-        padding: 14px 14px 10px;
+        padding: 14px 12px 10px;
     }
 
     .app-header {
         align-items: flex-start;
         flex-wrap: wrap;
         gap: 12px;
-        padding-bottom: 16px;
+        margin-bottom: 14px;
     }
 
     .brand__copy {
