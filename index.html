@@ -473,11 +473,19 @@
             margin-top: 14px;
         }
 
+        .input-footer {
+            display: flex;
+            align-items: flex-end;
+            justify-content: space-between;
+            gap: 16px;
+        }
+
         .voice-actions {
             display: flex;
             align-items: center;
             flex-wrap: wrap;
             gap: 8px;
+            min-width: 0;
         }
 
         .icon-btn,
@@ -514,6 +522,18 @@
             color: var(--accent-b);
         }
 
+        .convert-stack {
+            display: flex;
+            flex-direction: column;
+            align-items: stretch;
+            gap: 8px;
+            flex: 0 0 auto;
+        }
+
+        .convert-stack .btn--primary {
+            min-width: 230px;
+        }
+
         .mic-note {
             color: var(--muted);
             font-size: 14px;
@@ -546,6 +566,10 @@
             white-space: nowrap;
         }
 
+        #providerBadge {
+            display: none !important;
+        }
+
         .status {
             margin: 0;
             color: var(--muted);
@@ -573,14 +597,6 @@
         .action-btn:disabled {
             opacity: 0.45;
             cursor: not-allowed;
-        }
-
-        .workspace-footer {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            padding: 20px 24px;
-            border-top: 1px solid var(--border);
         }
 
         .btn--primary {
@@ -716,10 +732,31 @@
                 min-height: 220px;
             }
 
-            .voice-actions {
+            .input-footer {
                 display: grid;
-                grid-template-columns: auto minmax(0, 1fr) auto;
+                grid-template-columns: minmax(0, 1fr);
+                align-items: stretch;
+                gap: 10px;
+            }
+
+            .voice-actions {
+                display: flex;
+                align-items: center;
+                flex-wrap: wrap;
                 gap: 8px;
+                min-width: 0;
+            }
+
+            .convert-stack {
+                min-width: 0;
+            }
+
+            .convert-stack .btn--primary {
+                width: 100%;
+                min-width: 0;
+                min-height: 48px;
+                padding: 10px 12px;
+                font-size: 14px;
             }
 
             .output-actions {
@@ -734,8 +771,9 @@
                 font-size: 14px;
             }
 
-            .workspace-footer {
-                padding: 16px 18px;
+            .output-actions #clearBtn {
+                padding-left: 6px;
+                padding-right: 6px;
             }
         }
     </style>
@@ -807,7 +845,7 @@
                         <label class="sr-only" for="inputText">Write your thought in Hinglish</label>
                         <textarea id="inputText" maxlength="4000" rows="10" spellcheck="false" placeholder="Jaise: aaj mera mood thoda off hai, kuch samajh nahi aa raha kya karun..."></textarea>
 
-                        <div class="pane__footer">
+                        <div class="pane__footer input-footer">
                             <div class="voice-actions">
                                 <button class="icon-btn" id="micBtn" type="button" aria-pressed="false">
                                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -825,6 +863,16 @@
                                 <span class="listening" id="listening" hidden>
                                     <span class="listening__dot" aria-hidden="true"></span>Listening...
                                 </span>
+                            </div>
+                            <div class="convert-stack">
+                                <button class="btn btn--primary" id="convertBtn" type="button">
+                                    <svg class="btn__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                        <path d="m12 3 1.8 4.2L18 9l-4.2 1.8L12 15l-1.8-4.2L6 9l4.2-1.8L12 3Z"></path>
+                                        <path d="M19 15l.8 1.8L21.5 18l-1.7.8L19 20.5l-.8-1.7-1.7-.8 1.7-.8L19 15Z"></path>
+                                    </svg>
+                                    <span id="convertLabel">Convert to English</span>
+                                </button>
+                                <p class="status" id="status" data-state="idle" role="status" aria-live="polite">Ready when you are.</p>
                             </div>
                         </div>
                     </section>
@@ -874,22 +922,11 @@
                         </div>
                     </section>
                 </div>
-
-                <div class="workspace-footer">
-                    <button class="btn btn--primary" id="convertBtn" type="button">
-                        <svg class="btn__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                            <path d="m12 3 1.8 4.2L18 9l-4.2 1.8L12 15l-1.8-4.2L6 9l4.2-1.8L12 3Z"></path>
-                            <path d="M19 15l.8 1.8L21.5 18l-1.7.8L19 20.5l-.8-1.7-1.7-.8 1.7-.8L19 15Z"></path>
-                        </svg>
-                        <span id="convertLabel">Convert to English</span>
-                    </button>
-                    <p class="status" id="status" data-state="idle" role="status" aria-live="polite">Ready when you are.</p>
-                </div>
             </section>
         </main>
 
         <footer class="site-footer">
-            Your text is sent through the app's own server to the AI provider. No key is exposed in the browser.
+            © 2026 BolBindaas — Say it in Hinglish. Write it in English.
         </footer>
     </div>
 

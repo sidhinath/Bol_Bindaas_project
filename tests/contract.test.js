@@ -77,8 +77,25 @@ test("mobile layout stacks panes and scrolls tone pills without clipping", () =>
   assert.match(css, /overflow-x:\s*auto/);
   assert.match(css, /flex-wrap:\s*nowrap/);
   assert.match(css, /white-space:\s*nowrap/);
-  assert.match(css, /grid-template-columns:\s*auto minmax\(0, 1fr\) auto/);
+  assert.match(css, /grid-template-columns:\s*minmax\(0, 1fr\)/);
   assert.match(css, /grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\)/);
+  assert.match(css, /\.output-actions #clearBtn\s*\{[^}]*padding-left:\s*6px/s);
+});
+
+test("convert and status controls live in the input pane before the output pane", () => {
+  const inputStart = html.indexOf('class="pane pane--input"');
+  const outputStart = html.indexOf('id="outputCard"');
+  assert.ok(inputStart > -1 && outputStart > inputStart);
+  const inputPane = html.slice(inputStart, outputStart);
+  for (const id of ["micBtn", "convertBtn", "convertLabel", "status"]) {
+    assert.match(inputPane, new RegExp(`id="${id}"`), `#${id} must be inside the input pane`);
+  }
+});
+
+test("footer uses the current BolBindaas copyright line", () => {
+  assert.ok(
+    html.includes("© 2026 BolBindaas — Say it in Hinglish. Write it in English.")
+  );
 });
 
 test("provider options and the response badge are wired up", () => {
@@ -86,6 +103,7 @@ test("provider options and the response badge are wired up", () => {
     assert.match(html, new RegExp(`<option value="${provider}">`));
   }
   assert.match(html, /id="providerBadge"/);
+  assert.match(css, /#providerBadge\s*\{[^}]*display:\s*none\s*!important/s);
   assert.match(app, /provider: providerEl\.value \|\| "auto"/);
   assert.match(app, /data\.provider/);
 });
