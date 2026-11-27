@@ -820,7 +820,50 @@
         // Immediately unregister all Service Workers to wipe any cached app.js
         // so the browser loads the fresh bundle from GitHub/Render immediately.
         navigator.serviceWorker.getRegistrations().then(rs => rs.forEach(r => r.unregister()));
-    </script>
+    </style>
+
+    <style id="mobile-and-logo-override">
+      .brand-logo {
+        width: 40px !important;
+        height: 40px !important;
+        border-radius: 11px !important;
+        overflow: hidden !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        flex-shrink: 0 !important;
+        background: #0d1324 !important;
+        box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35) !important;
+        padding: 0 !important;
+      }
+      .brand-logo svg {
+        width: 40px !important;
+        height: 40px !important;
+        display: block !important;
+      }
+      @media (max-width: 820px) {
+        .tone-bar > label,
+        .tone-label,
+        .tone-bar > span:first-child {
+          display: none !important;
+        }
+        .tone-bar {
+          padding: 10px 12px !important;
+        }
+        .tone-pills {
+          display: flex !important;
+          flex-wrap: wrap !important;
+          overflow-x: visible !important;
+          width: 100% !important;
+        }
+        .tone-pill,
+        .tone-pills button {
+          padding: 6px 12px !important;
+          font-size: 13px !important;
+          flex: 0 0 auto !important;
+        }
+      }
+    </style>
 </head>
 <body>
     <div class="app-shell">
