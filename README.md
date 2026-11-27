@@ -3,7 +3,8 @@
 BolBindaas turns Hinglish thoughts into clean, natural English. Type or speak in Roman Hindi, choose a tone, and get a polished English version that keeps the original meaning and emotion.
 
 **Live demo:** https://bol-bindaas-project.onrender.com  
-**Health check:** https://bol-bindaas-project.onrender.com/api/health
+**Health check:** https://bol-bindaas-project.onrender.com/api/health  
+**Download Android App (APK):** https://github.com/sidhinath/Bol_Bindaas_project/releases
 
 ## Project Overview
 
