@@ -919,6 +919,9 @@ class AppHandler(SimpleHTTPRequestHandler):
         text = payload.get("text")
         tone = payload.get("tone", "normal")
         requested_provider = normalize_provider(payload.get("provider", PROVIDER_AUTO))
+        stream = payload.get("stream", False)
+        if not isinstance(stream, bool):
+            stream = False
 
         if not isinstance(text, str) or not text.strip():
             self.send_json(400, {"error": "Please enter some Hinglish text."})

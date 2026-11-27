@@ -156,7 +156,7 @@ function clearOutput() {
 
 /* ---------- Conversion ---------- */
 
-async function convertToEnglish() {
+async function convertToEnglish(stream) {
     const text = inputEl.value.trim();
 
     if (!text) {
@@ -184,45 +184,93 @@ async function convertToEnglish() {
     setOutputStatus("");
 
     try {
+        const body = {
+            text,
+            tone: toneEl.value,
+            provider: providerEl.value || "auto"
+        };
+        if (stream) body.stream = true;
+
         const response = await fetch(API_ENDPOINT, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                text,
-                tone: toneEl.value,
-                provider: providerEl.value || "auto"
-            })
+            body: JSON.stringify(body)
         });
 
-        let data;
-        try {
-            data = await response.json();
-        } catch {
-            throw new Error("The server sent an unreadable response. Check the server terminal.");
+        // Check if response indicates unsupported request mode when stream=true
+        const responseClone = response.clone();
+        const errorText = await responseClone.text();
+        if (stream && errorText.includes("Unsupported request mode")) {
+            // Fallback to standard JSON mode
+            body.stream = false;
+            const retryResponse = await fetch(API_ENDPOINT, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(body)
+            });
+            // Process the retry response as standard JSON mode
+            stream = false;
+            return convertToEnglishHelper(retryResponse, stream);
         }
 
-        if (!response.ok) {
-            throw new Error(data && data.error ? data.error : `Request failed (${response.status}).`);
+        // Standard JSON mode (existing behaviour).
+        if (!stream) {
+            let data;
+            try {
+                data = await response.json();
+            } catch {
+                throw new Error("The server sent an unreadable response. Check the server terminal.");
+            }
+
+            if (!response.ok) {
+                throw new Error(data && data.error ? data.error : `Request failed (${response.status}).`);
+            }
+
+            const result = data && typeof data.text === "string" ? data.text.trim() : "";
+            if (!result) {
+                throw new Error("The conversion came back empty. Please try again.");
+            }
+
+            currentOutput = result;
+            outputText.textContent = result;
+            outputText.classList.remove("is-placeholder");
+            [copyBtn, listenBtn, clearBtn].forEach((button) => { button.disabled = false; });
+
+            // Show which provider actually answered (Auto may have fallen back).
+            const usedProvider = data && data.provider ? data.provider : "";
+            providerBadge.textContent = usedProvider
+                ? `Powered by ${PROVIDER_LABELS[usedProvider] || usedProvider}`
+                : "";
+            providerBadge.hidden = !usedProvider;
+
+            setStatus(`Done in ${elapsedSeconds()}s — here is your English version.`, "success");
+            return;
         }
 
-        const result = data && typeof data.text === "string" ? data.text.trim() : "";
-        if (!result) {
-            throw new Error("The conversion came back empty. Please try again.");
+        // Streaming mode: pipe tokens into #outputText as they arrive.
+        if (stream && response.body && "stream" in response) {
+            const reader = response.body.getReader();
+            const textDecoder = new TextDecoder();
+            outputCard.classList.add("is-loading");
+            setStatus("Streaming translation...", "loading");
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                const chunk = textDecoder.decode(value);
+                // Accumulate and display each received chunk.
+                currentOutput += chunk;
+                outputText.textContent = currentOutput || PLACEHOLDER;
+                outputText.classList.remove("is-placeholder");
+                [copyBtn, listenBtn, clearBtn].forEach((button) => { button.disabled = false; });
+            }
+
+            setStatus(`Streaming complete — here is your English version.`, "success");
+            return;
         }
 
-        currentOutput = result;
-        outputText.textContent = result;
-        outputText.classList.remove("is-placeholder");
-        [copyBtn, listenBtn, clearBtn].forEach((button) => { button.disabled = false; });
-
-        // Show which provider actually answered (Auto may have fallen back).
-        const usedProvider = data && data.provider ? data.provider : "";
-        providerBadge.textContent = usedProvider
-            ? `Powered by ${PROVIDER_LABELS[usedProvider] || usedProvider}`
-            : "";
-        providerBadge.hidden = !usedProvider;
-
-        setStatus(`Done in ${elapsedSeconds()}s — here is your English version.`, "success");
+        // Fallback for unknown response format.
+        throw new Error("Unsupported request mode.");
     } catch (error) {
         const message = error instanceof TypeError
             ? "Cannot reach the app server. Is server.py running?"
@@ -421,6 +469,20 @@ themeToggle.addEventListener("click", () => {
 });
 
 /* ---------- Wire up ---------- */
+
+// Server warm-up: call /api/health on page load and on input focus
+// so Render wakes up while the user is still typing.
+function wakeServer() {
+    fetch("/api/health")
+        .then((r) => r.json())
+        .then((data) => {
+            // We just want the side-effect of keeping the dyno awake.
+        })
+        .catch(() => { /* no-op */ });
+}
+wakeServer();
+
+inputEl.addEventListener("focus", wakeServer);
 
 inputEl.addEventListener("input", updateCounter);
 inputEl.addEventListener("keydown", (event) => {
