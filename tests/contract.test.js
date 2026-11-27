@@ -27,35 +27,44 @@ test("voice input is configured for Hindi and output speech for English", () => 
   assert.match(app, /utterance\.lang\s*=\s*"en-US"/);
 });
 
-test("tone pills in the markup match the values used by the app and server", () => {
-  for (const tone of ["casual", "professional", "polite", "direct", "empathetic"]) {
+test("capitalized tone pills are normalized for the server before conversion", () => {
+  for (const tone of ["Casual", "Professional", "Polite", "Direct", "Empathetic"]) {
     assert.match(html, new RegExp(`data-tone="${tone}"`));
   }
-  assert.match(html, /id="tone" value="direct"/);
+  assert.match(html, /class="tone-pill active" data-tone="Casual"/);
   assert.match(app, /DEFAULT_TONE\s*=\s*"direct"/);
-  assert.match(app, /tone: toneEl\.value/);
+  assert.match(app, /String\(pill\.dataset\.tone \|\| ""\)\.toLowerCase\(\)/);
+  assert.match(app, /tone: currentTone/);
   assert.match(app, /querySelectorAll\("\[data-tone\]"\)/);
 });
 
-test("workspace follows the high-end writing workspace design contract", () => {
+test("workspace follows the split-pane writing workspace design contract", () => {
   assert.match(css, /max-width:\s*1180px/);
-  assert.match(css, /--bg:\s*#090D16/);
-  assert.match(css, /--surface:\s*#111827/);
-  assert.match(css, /rgba\(255, 255, 255, 0\.08\)/);
-  assert.match(css, /font-family:\s*Inter/);
+  assert.match(css, /--bg-page:\s*#090d16/);
+  assert.match(css, /--bg-surface:\s*#111827/);
+  assert.match(css, /--bg-input:\s*#0d1320/);
+  assert.match(css, /--border-subtle:\s*rgba\(255, 255, 255, 0\.09\)/);
+  assert.match(css, /--text-primary:\s*#f8fafc/);
+  assert.match(css, /--accent-primary:\s*#6366f1/);
+  assert.match(css, /font-family:\s*'Inter'/);
   assert.doesNotMatch(html, /serif/i);
-  assert.match(css, /grid-template-columns:\s*minmax\(0, 1fr\) 1px minmax\(0, 1fr\)/);
-  assert.match(css, /font-size:\s*1\.125rem/);
-  assert.match(html, /class="skeleton"/);
-  assert.match(html, /id="inputClearBtn"/);
+  assert.match(css, /grid-template-columns:\s*1fr 1fr/);
+  assert.match(css, /grid-template-columns:\s*1fr;/);
+  assert.match(css, /font-size:\s*18px/);
+  assert.match(css, /min-height:\s*220px/);
+  assert.match(css, /svg\s*\{[^}]*width:\s*18px[^}]*height:\s*18px/s);
+  assert.match(css, /\.tone-pill\.active/);
+  assert.match(html, /class="split-grid"/);
+  assert.match(html, /id="charCount"/);
   assert.match(html, /id="convertBtn"/);
 });
 
-test("provider options and the response badge are wired up", () => {
-  for (const provider of ["auto", "gemini", "openai", "groq", "openrouter"]) {
-    assert.match(html, new RegExp(`<option value="${provider}">`));
-  }
-  assert.match(html, /id="providerBadge"/);
-  assert.match(app, /provider: providerEl\.value \|\| "auto"/);
-  assert.match(app, /data\.provider/);
+test("compact model picker maps to supported server providers", () => {
+  assert.match(html, /<option value="auto" selected>AI Auto<\/option>/);
+  assert.match(html, /<option value="fast">Fast<\/option>/);
+  assert.match(html, /<option value="quality">Pro<\/option>/);
+  assert.match(html, /id="modelSelect"/);
+  assert.match(app, /fast:\s*"groq"/);
+  assert.match(app, /quality:\s*"gemini"/);
+  assert.match(app, /provider:\s*MODEL_PROVIDERS\[selected\] \|\| "auto"/);
 });
