@@ -265,10 +265,8 @@ async function convertToEnglish(stream) {
             return;
         }
     } catch (error) {
-        const message = error instanceof TypeError
-            ? "Cannot reach the app server. Is server.py running?"
-            : error.message;
-        setStatus(message || "Something went wrong. Please try again.", "error");
+        // Surface exact JS error on screen so nothing fails silently
+        setStatus("JS Error: " + error.message, "error");
     } finally {
         abortCtrl.abort();
         clearTimeout(timeoutTimeout);

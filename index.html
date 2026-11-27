@@ -794,6 +794,11 @@
             }
         }
     </style>
+    <script>
+        // Immediately unregister all Service Workers to wipe any cached app.js
+        // so the browser loads the fresh bundle from GitHub/Render immediately.
+        navigator.serviceWorker.getRegistrations().then(rs => rs.forEach(r => r.unregister()));
+    </script>
 </head>
 <body>
     <div class="app-shell">
@@ -947,6 +952,6 @@
         </footer>
     </div>
 
-    <script src="app.js?v=6"></script>
+    <script src="app.js?v=7"></script>
 </body>
 </html>
