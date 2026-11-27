@@ -2,8 +2,5 @@
   "appId": "com.bolbindaas.app",
   "appName": "BolBindaas",
   "webDir": "www",
-  "server": {
-    "url": "https://bol-bindaas-project.onrender.com",
-    "cleartext": false
-  }
+  
 }
