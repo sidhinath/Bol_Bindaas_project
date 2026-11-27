@@ -6,7 +6,8 @@ const path = require("node:path");
 const ROOT = path.join(__dirname, "..");
 const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
 const app = fs.readFileSync(path.join(ROOT, "app.js"), "utf8");
-const css = fs.readFileSync(path.join(ROOT, "style.css"), "utf8");
+const styleBlock = html.match(/<style>([\s\S]*?)<\/style>/);
+const css = styleBlock ? styleBlock[1] : "";
 
 test("every element requested by app.js exists in index.html", () => {
   const ids = [...app.matchAll(/getElementById\("([^"]+)"\)/g)].map((match) => match[1]);
@@ -27,44 +28,64 @@ test("voice input is configured for Hindi and output speech for English", () => 
   assert.match(app, /utterance\.lang\s*=\s*"en-US"/);
 });
 
-test("capitalized tone pills are normalized for the server before conversion", () => {
-  for (const tone of ["Casual", "Professional", "Polite", "Direct", "Empathetic"]) {
+test("tone pills in the markup match the values used by the app and server", () => {
+  for (const tone of ["casual", "professional", "polite", "direct", "empathetic"]) {
     assert.match(html, new RegExp(`data-tone="${tone}"`));
   }
-  assert.match(html, /class="tone-pill active" data-tone="Casual"/);
+  assert.match(html, /id="tone" value="direct"/);
+  assert.match(html, /class="tone-pill is-active" type="button" data-tone="direct"/);
   assert.match(app, /DEFAULT_TONE\s*=\s*"direct"/);
-  assert.match(app, /String\(pill\.dataset\.tone \|\| ""\)\.toLowerCase\(\)/);
-  assert.match(app, /tone: currentTone/);
+  assert.match(app, /tone: toneEl\.value/);
   assert.match(app, /querySelectorAll\("\[data-tone\]"\)/);
 });
 
-test("workspace follows the split-pane writing workspace design contract", () => {
+test("all CSS is embedded inline with no external stylesheet or Tailwind dependency", () => {
+  assert.ok(styleBlock, "Expected a <style> block in index.html");
+  assert.doesNotMatch(html, /<link[^>]*rel=["']stylesheet["'][^>]*>/i);
+  assert.doesNotMatch(html, /tailwind/i);
   assert.match(css, /max-width:\s*1180px/);
-  assert.match(css, /--bg-page:\s*#090d16/);
-  assert.match(css, /--bg-surface:\s*#111827/);
-  assert.match(css, /--bg-input:\s*#0d1320/);
-  assert.match(css, /--border-subtle:\s*rgba\(255, 255, 255, 0\.09\)/);
-  assert.match(css, /--text-primary:\s*#f8fafc/);
-  assert.match(css, /--accent-primary:\s*#6366f1/);
-  assert.match(css, /font-family:\s*'Inter'/);
-  assert.doesNotMatch(html, /serif/i);
-  assert.match(css, /grid-template-columns:\s*1fr 1fr/);
-  assert.match(css, /grid-template-columns:\s*1fr;/);
-  assert.match(css, /font-size:\s*18px/);
-  assert.match(css, /min-height:\s*220px/);
-  assert.match(css, /svg\s*\{[^}]*width:\s*18px[^}]*height:\s*18px/s);
-  assert.match(css, /\.tone-pill\.active/);
-  assert.match(html, /class="split-grid"/);
-  assert.match(html, /id="charCount"/);
-  assert.match(html, /id="convertBtn"/);
+  assert.match(css, /font-family:\s*Inter/);
+  assert.doesNotMatch(css, /font-family:\s*['"]?(serif|georgia|times)/i);
 });
 
-test("compact model picker maps to supported server providers", () => {
-  assert.match(html, /<option value="auto" selected>AI Auto<\/option>/);
-  assert.match(html, /<option value="fast">Fast<\/option>/);
-  assert.match(html, /<option value="quality">Pro<\/option>/);
-  assert.match(html, /id="modelSelect"/);
-  assert.match(app, /fast:\s*"groq"/);
-  assert.match(app, /quality:\s*"gemini"/);
-  assert.match(app, /provider:\s*MODEL_PROVIDERS\[selected\] \|\| "auto"/);
+test("dark and light themes use the specified palette and gradient CTA", () => {
+  assert.match(css, /\[data-theme="dark"\]/);
+  assert.match(css, /--page:\s*#090d16/);
+  assert.match(css, /--surface:\s*#111827/);
+  assert.match(css, /--input:\s*#0d1320/);
+  assert.match(css, /--text:\s*#f8fafc/);
+  assert.match(css, /\[data-theme="light"\]/);
+  assert.match(css, /body\.light-theme/);
+  assert.match(css, /#6366f1/);
+  assert.match(css, /#8b5cf6/);
+});
+
+test("workspace follows the centered split-pane design contract", () => {
+  assert.match(css, /grid-template-columns:\s*1fr 1fr/);
+  assert.match(css, /font-size:\s*18px/);
+  assert.match(css, /font-size:\s*14px/);
+  assert.match(css, /svg\s*\{[^}]*width:\s*18px[^}]*height:\s*18px/s);
+  assert.match(html, /class="skeleton"/);
+  assert.match(html, /id="inputClearBtn"/);
+  assert.match(html, /id="convertBtn"/);
+  assert.match(html, /id="status" data-state="idle"/);
+});
+
+test("mobile layout stacks panes and scrolls tone pills without clipping", () => {
+  assert.match(css, /@media\s*\(max-width:\s*820px\)/);
+  assert.match(css, /grid-template-columns:\s*1fr;/);
+  assert.match(css, /overflow-x:\s*auto/);
+  assert.match(css, /flex-wrap:\s*nowrap/);
+  assert.match(css, /white-space:\s*nowrap/);
+  assert.match(css, /grid-template-columns:\s*auto minmax\(0, 1fr\) auto/);
+  assert.match(css, /grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\)/);
+});
+
+test("provider options and the response badge are wired up", () => {
+  for (const provider of ["auto", "gemini", "openai", "groq", "openrouter"]) {
+    assert.match(html, new RegExp(`<option value="${provider}">`));
+  }
+  assert.match(html, /id="providerBadge"/);
+  assert.match(app, /provider: providerEl\.value \|\| "auto"/);
+  assert.match(app, /data\.provider/);
 });
