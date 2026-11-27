@@ -177,9 +177,9 @@ async function convertToEnglish(stream) {
         return;
     }
 
-    // AbortController for 15-second timeout
+    // AbortController for 20-second timeout
     const abortCtrl = new AbortController();
-    const timeoutTimeout = setTimeout(() => abortCtrl.abort(), 15000);
+    const timeoutTimeout = setTimeout(() => abortCtrl.abort(), 20000);
 
     setBusy(true);
     startBusyFeedback();
@@ -216,7 +216,7 @@ async function convertToEnglish(stream) {
                 throw new Error(data && data.error ? data.error : `Request failed (${response.status}).`);
             }
 
-            const result = data && typeof data.text === "string" ? data.text.trim() : "";
+            const result = (data && typeof data.text === "string" ? data.text : "") || (data && typeof data.translation === "string" ? data.translation : "") || (data && typeof data.output === "string" ? data.output : "").trim();
             if (!result) {
                 throw new Error("The conversion came back empty. Please try again.");
             }
