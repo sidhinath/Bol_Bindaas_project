@@ -2,8 +2,9 @@
 
 Uses only the Python standard library, so there are no packages to install.
 The frontend calls POST /api/convert; this file is the only place that reads
-API keys, from the environment (or a local .env file). Gemini is the primary
-provider; OpenAI, Groq, and OpenRouter are optional automatic fallbacks.
+API keys, from the environment (or a local .env file). Groq
+(llama-3.1-8b-instant) is the primary provider; Gemini is the automatic
+fallback, with OpenAI and OpenRouter as optional extra backups.
 """
 
 import json
@@ -42,14 +43,14 @@ MAX_RETRY_DELAY_SECONDS = 4
 RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
 TEMPORARY_STATUS_CODES = {429, 500, 502, 503, 504}
 
-# Provider names and the Auto order. Gemini is primary; Groq is the
-# designated fallback. OpenAI/OpenRouter remain optional extra backups.
+# Provider names and the Auto order. Groq (llama-3.1-8b-instant) is primary;
+# Gemini is the automatic fallback. OpenAI/OpenRouter remain optional backups.
 PROVIDER_GEMINI = "gemini"
 PROVIDER_GROQ = "groq"
 PROVIDER_OPENAI = "openai"
 PROVIDER_OPENROUTER = "openrouter"
 PROVIDER_AUTO = "auto"
-PROVIDER_ORDER = (PROVIDER_GEMINI, PROVIDER_GROQ, PROVIDER_OPENAI, PROVIDER_OPENROUTER)
+PROVIDER_ORDER = (PROVIDER_GROQ, PROVIDER_GEMINI, PROVIDER_OPENAI, PROVIDER_OPENROUTER)
 ALLOWED_PROVIDERS = {PROVIDER_AUTO, *PROVIDER_ORDER}
 PROVIDER_LABELS = {
     PROVIDER_GEMINI: "Gemini",
@@ -72,7 +73,7 @@ PROVIDER_DEFAULTS = {
     },
     PROVIDER_GROQ: {
         "base_url": "https://api.groq.com/openai/v1",
-        "model": "llama-3.1-8b-instant",
+        "model": "llama-3.3-70b-versatile",
         "key_env": "GROQ_API_KEY",
     },
     PROVIDER_OPENROUTER: {
@@ -103,13 +104,15 @@ BASE_URL_ENV_VARS = {
 GEMINI_TIMEOUT_SECONDS = DEFAULT_TIMEOUT_SECONDS
 MAX_ATTEMPTS = DEFAULT_MAX_ATTEMPTS
 
-# Short instruction that keeps every quality constraint but removes filler.
-# The exact same instruction is used for every provider.
+# Strict semantic accuracy instruction — small models misinterpret
+# nuanced Hinglish verbs (e.g. "pehnunga" = "to wear" vs "dhona" = "to wash").
 SYSTEM_PROMPT = (
-    "Rewrite Hinglish (Hindi in Roman script mixed with English) as clear, "
-    "natural, grammatically correct English. Preserve the exact meaning, "
-    "emotion, and tone. Output only the English text — no explanations, "
-    "quotes, or preamble."
+    "Rewrite Hinglish (Hindi written in Roman script mixed with English) "
+    "into clear, natural, grammatically correct English. Preserve every "
+    "exact action, subject, intent, emotion, and tone without altering or "
+    "guessing the meaning (e.g. distinguish accurately between "
+    "\"pehnunga\" = \"to wear\" vs \"dhona\" = \"to wash\"). Output ONLY "
+    "the English translation — no explanations, quotes, or extra commentary."
 )
 
 # New UI pills map to these values; legacy values stay valid for old clients.
@@ -245,7 +248,7 @@ def retry_delay(attempt: int, headers: dict | None = None) -> int:
 
 
 def model_for_attempt(attempt: int) -> str:
-    """Use the configured Gemini model first, then a lighter fallback."""
+    """Use the configured Gemini model on a Gemini attempt, then a lighter one."""
     models = [CONFIG["model"]]
     fallback = CONFIG.get("fallback_model")
     if fallback and fallback not in models:
@@ -275,7 +278,7 @@ def provider_setting(name: str, field: str) -> str:
 
 
 def provider_chain(requested: str) -> tuple:
-    """Providers to try: Auto uses the fixed Gemini-first order."""
+    """Providers to try: Auto uses the fixed Groq-first order."""
     if requested == PROVIDER_AUTO:
         return PROVIDER_ORDER
     return (requested,)
@@ -806,9 +809,9 @@ def call_ai(
 
     available = [name for name in chain if provider_key(name)]
     if not available:
-        if requested in (PROVIDER_AUTO, PROVIDER_GEMINI):
+        if requested in (PROVIDER_AUTO, PROVIDER_GROQ):
             message = (
-                "Gemini API key is not configured. Add AI_API_KEY to .env and restart "
+                "Groq API key is not configured. Add GROQ_API_KEY to .env and restart "
                 "the server (or set it in the hosting platform)."
             )
         else:
@@ -876,7 +879,7 @@ class AppHandler(SimpleHTTPRequestHandler):
                     "provider": (
                         selection
                         if selection != PROVIDER_AUTO
-                        else PROVIDER_GEMINI
+                        else PROVIDER_GROQ
                     ),
                     "provider_selection": selection,
                     "providers": configured_providers(),

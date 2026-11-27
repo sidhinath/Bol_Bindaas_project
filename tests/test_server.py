@@ -25,10 +25,12 @@ sys.path.insert(0, str(ROOT))
 import server  # noqa: E402
 
 EXPECTED_SYSTEM_PROMPT = (
-    "Rewrite Hinglish (Hindi in Roman script mixed with English) as clear, "
-    "natural, grammatically correct English. Preserve the exact meaning, "
-    "emotion, and tone. Output only the English text — no explanations, "
-    "quotes, or preamble."
+    "Rewrite Hinglish (Hindi written in Roman script mixed with English) "
+    "into clear, natural, grammatically correct English. Preserve every "
+    "exact action, subject, intent, emotion, and tone without altering or "
+    "guessing the meaning (e.g. distinguish accurately between "
+    "\"pehnunga\" = \"to wear\" vs \"dhona\" = \"to wash\"). Output ONLY "
+    "the English translation — no explanations, quotes, or extra commentary."
 )
 
 ENV_KEYS = (
@@ -243,7 +245,7 @@ class ConfigTests(unittest.TestCase):
             self.assertEqual(server.provider_key("openrouter"), "openrouter-key")
             self.assertEqual(
                 server.configured_providers(),
-                ["gemini", "groq", "openai", "openrouter"],
+                ["groq", "gemini", "openai", "openrouter"],
             )
 
     def test_unknown_provider_selection_falls_back_to_auto(self):
@@ -577,12 +579,13 @@ class CallAiTests(unittest.TestCase):
     def test_missing_api_key_raises_503(self):
         server.CONFIG["key"] = ""
         server.CONFIG["keys"]["gemini"] = ""
+        server.CONFIG["keys"]["groq"] = ""
 
         with self.assertRaises(server.ApiError) as raised:
             server.call_ai("test", "normal")
 
         self.assertEqual(raised.exception.status, 503)
-        self.assertIn("AI_API_KEY", raised.exception.message)
+        self.assertIn("GROQ_API_KEY", raised.exception.message)
 
     def test_gemini_http_error_is_mapped_to_502(self):
         error = urllib.error.HTTPError(
@@ -815,7 +818,7 @@ def make_http_error(status, message, url="https://api.example/v1/chat/completion
 
 
 class MultiProviderTests(unittest.TestCase):
-    """Gemini-first fallback chain with OpenAI-compatible backup providers."""
+    """Groq-first fallback chain with Gemini and OpenAI-compatible backups."""
 
     def setUp(self):
         self.saved_config = copy.deepcopy(server.CONFIG)
@@ -859,18 +862,44 @@ class MultiProviderTests(unittest.TestCase):
         server.MAX_ATTEMPTS = self.saved_attempts
         server.DEBUG = self.saved_debug
 
-    def test_auto_chain_is_gemini_first_and_provider_names_are_normalized(self):
+    def test_auto_chain_is_groq_first_and_provider_names_are_normalized(self):
         self.assertEqual(
             server.provider_chain("auto"),
-            ("gemini", "groq", "openai", "openrouter"),
+            ("groq", "gemini", "openai", "openrouter"),
         )
         self.assertEqual(server.normalize_provider(" OpenAI "), "openai")
         self.assertEqual(server.normalize_provider("unknown"), "auto")
         self.assertEqual(server.provider_chain("groq"), ("groq",))
 
-    def test_gemini_429_switches_immediately_to_groq(self):
+    def test_auto_uses_groq_first_with_its_default_model(self):
+        with patch.object(
+            server.urllib.request,
+            "urlopen",
+            return_value=FakeResponse(chat_payload("Groq translation.")),
+        ) as urlopen:
+            timings = {}
+            result = server.call_ai("test", "normal", timings)
+
+        self.assertEqual(result, "Groq translation.")
+        self.assertEqual(timings["provider"], "groq")
+        request = urlopen.call_args.args[0]
+        self.assertEqual(
+            request.full_url, "https://api.groq.com/openai/v1/chat/completions"
+        )
+        payload = json.loads(request.data.decode("utf-8"))
+        self.assertEqual(payload["model"], "llama-3.3-70b-versatile")
+
+    def test_groq_429_switches_immediately_to_gemini(self):
         errors = [make_http_error(429, "Quota exceeded")]
-        responses = [FakeResponse(chat_payload("Switched to Groq."))]
+        responses = [
+            FakeResponse(
+                {
+                    "candidates": [
+                        {"content": {"parts": [{"text": "Switched to Gemini."}]}}
+                    ]
+                }
+            )
+        ]
         output = io.StringIO()
 
         with patch.object(
@@ -879,55 +908,66 @@ class MultiProviderTests(unittest.TestCase):
             timings = {}
             result = server.call_ai("test", "normal", timings)
 
-        self.assertEqual(result, "Switched to Groq.")
-        self.assertEqual(timings["provider"], "groq")
+        self.assertEqual(result, "Switched to Gemini.")
+        self.assertEqual(timings["provider"], "gemini")
         self.assertEqual(urlopen.call_count, 2)
         self.assertIn(
-            "models/gemini-3.5-flash-lite", urlopen.call_args_list[0].args[0].full_url
+            "api.groq.com/openai/v1/chat/completions",
+            urlopen.call_args_list[0].args[0].full_url,
         )
         self.assertIn(
-            "api.groq.com/openai/v1/chat/completions",
-            urlopen.call_args_list[1].args[0].full_url,
+            "models/gemini-3.5-flash-lite", urlopen.call_args_list[1].args[0].full_url
         )
-        self.assertIn("Provider switch: Gemini failed", output.getvalue())
-        self.assertIn("trying Groq", output.getvalue())
+        self.assertIn("Provider switch: Groq failed", output.getvalue())
+        self.assertIn("trying Gemini", output.getvalue())
         self.assertEqual(self.sleep_mock.call_count, 0)
 
-    def test_gemini_timeout_switches_to_groq_without_extra_wait(self):
+    def test_groq_timeout_switches_to_gemini_without_extra_wait(self):
+        gemini_response = FakeResponse(
+            {
+                "candidates": [
+                    {"content": {"parts": [{"text": "After timeout."}]}}
+                ]
+            }
+        )
         with patch.object(
             server.urllib.request,
             "urlopen",
-            side_effect=[TimeoutError(), FakeResponse(chat_payload("After timeout."))],
+            side_effect=[TimeoutError(), gemini_response],
         ) as urlopen:
             timings = {}
             result = server.call_ai("test", "normal", timings)
 
         self.assertEqual(result, "After timeout.")
-        self.assertEqual(timings["provider"], "groq")
+        self.assertEqual(timings["provider"], "gemini")
         self.assertEqual(urlopen.call_count, 2)
         self.assertEqual(self.sleep_mock.call_count, 0)
 
-    def test_gemini_network_error_switches_to_groq(self):
+    def test_groq_network_error_switches_to_gemini(self):
+        gemini_response = FakeResponse(
+            {
+                "candidates": [
+                    {"content": {"parts": [{"text": "Gemini answer."}]}}
+                ]
+            }
+        )
         with patch.object(
             server.urllib.request,
             "urlopen",
-            side_effect=[
-                urllib.error.URLError("offline"),
-                FakeResponse(chat_payload("Groq answer.")),
-            ],
+            side_effect=[urllib.error.URLError("offline"), gemini_response],
         ) as urlopen:
             timings = {}
             result = server.call_ai("test", "normal", timings)
 
-        self.assertEqual(result, "Groq answer.")
-        self.assertEqual(timings["provider"], "groq")
-        self.assertIn("api.groq.com/openai/v1/chat/completions", urlopen.call_args.args[0].full_url)
+        self.assertEqual(result, "Gemini answer.")
+        self.assertEqual(timings["provider"], "gemini")
+        self.assertIn("models/gemini-3.5-flash-lite", urlopen.call_args.args[0].full_url)
 
     def test_all_providers_failing_returns_friendly_503(self):
         offline = urllib.error.URLError("offline")
         failures = [
-            make_http_error(429, "Quota exceeded"),  # Gemini
-            make_http_error(503, "High demand"),     # Groq
+            make_http_error(429, "Quota exceeded"),  # Groq (primary)
+            make_http_error(503, "High demand"),     # Gemini (automatic fallback)
             TimeoutError(),                          # OpenAI
             offline,                                  # OpenRouter
             offline,
@@ -1171,14 +1211,14 @@ class HandlerIntegrationTests(unittest.TestCase):
             return status, body, headers
         return status, body
 
-    def test_health_endpoint_reports_gemini_configuration(self):
+    def test_health_endpoint_reports_groq_as_auto_primary(self):
         status, body = self.send_request("/api/health")
         data = json.loads(body)
 
         self.assertEqual(status, 200)
         self.assertEqual(data["status"], "ok")
         self.assertEqual(data["configured"], True)
-        self.assertEqual(data["provider"], "gemini")
+        self.assertEqual(data["provider"], "groq")
         self.assertEqual(data["provider_selection"], "auto")
         self.assertEqual(data["providers"], ["gemini"])
         self.assertEqual(data["model"], "gemini-3.5-flash-lite")
@@ -1344,13 +1384,14 @@ class HandlerIntegrationTests(unittest.TestCase):
     def test_missing_key_returns_503(self):
         server.CONFIG["key"] = ""
         server.CONFIG["keys"]["gemini"] = ""
+        server.CONFIG["keys"]["groq"] = ""
 
         status, body = self.send_request(
             "/api/convert", method="POST", payload={"text": "test", "tone": "normal"}
         )
 
         self.assertEqual(status, 503)
-        self.assertIn("AI_API_KEY", json.loads(body)["error"])
+        self.assertIn("GROQ_API_KEY", json.loads(body)["error"])
 
     def test_gemini_error_is_passed_to_the_browser_as_502(self):
         MockGeminiHandler.status = 400

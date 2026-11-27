@@ -19,7 +19,7 @@ The web deployment stays on Render; the Android build uses Capacitor and calls t
 - **One-click Tone pills:** Casual, Professional, Polite, **Direct** (default), and Empathetic. The active pill uses the indigo-to-violet gradient.
 - **Dark / Light mode toggle:** A header button switches themes and remembers the choice in `localStorage`.
 - **Voice Input & Text-to-Speech:** **Speak** uses the Web Speech API with Hindi (`hi-IN`) recognition; **Listen** reads the English result with SpeechSynthesis (`en-US`).
-- **Multi-provider AI fallback:** In Auto mode, Gemini runs first; Groq takes over on rate limits, high demand, timeouts, or network errors. Optional OpenAI and OpenRouter keys add further backups. The dropdown also allows a fixed `auto`, `gemini`, `openai`, `groq`, or `openrouter` choice.
+- **Multi-provider AI fallback:** In Auto mode, Groq (`llama-3.1-8b-instant`) runs first; Gemini is the automatic fallback on rate limits, high demand, timeouts, or network errors. Optional OpenAI and OpenRouter keys add further backups. The dropdown also allows a fixed `auto`, `gemini`, `openai`, `groq`, or `openrouter` choice.
 - **Native Android app support via Capacitor:** The `www/` web assets and `android/` project are ready to open in Android Studio. In the native runtime, `app.js` calls the deployed Render API.
 - **Focused conversion workflow:** 4,000-character input with a live counter, loading skeleton, elapsed-time feedback, empty/offline/API error handling, and `Ctrl/Cmd + Enter` shortcut.
 - **Clean output actions:** Copy, Listen, and **Clear / New**. The API still returns the responding provider; the legacy `#providerBadge` element stays in the DOM for `app.js` but is visually hidden.
@@ -47,10 +47,10 @@ server.py
   • sends CORS headers for cross-origin Android requests
   • keeps every key server-side
   ▼
-Gemini  →  Groq  →  OpenAI  →  OpenRouter
-(primary)  (automatic fallback)  (optional backups)
+Groq  →  Gemini  →  OpenAI  →  OpenRouter
+(primary)       (automatic fallback)  (optional backups)
   ▼
-{ "text": "Clean natural English", "provider": "gemini" }
+{ "text": "Clean natural English", "provider": "groq" }
 ```
 
 `GET /api/health` reports status, provider selection, configured providers, and model settings. All active styling lives in `index.html`; `style.css` remains only as an unused legacy file.
@@ -60,8 +60,9 @@ Gemini  →  Groq  →  OpenAI  →  OpenRouter
 ### Prerequisites
 
 - Python 3.10+
-- A Gemini API key: https://aistudio.google.com/apikey
-- Optional keys for Groq, OpenAI, and OpenRouter
+- A Groq API key: https://console.groq.com/keys
+- A Gemini API key as the automatic fallback: https://aistudio.google.com/apikey
+- Optional keys for OpenAI and OpenRouter
 - Node.js 18+ for the `npm` scripts, tests, and Capacitor sync
 - Chrome recommended for voice input
 
@@ -77,8 +78,8 @@ Add at least the primary key to `.env`:
 
 ```env
 AI_PROVIDER=auto
-GEMINI_API_KEY=your-gemini-key-here
-GROQ_API_KEY=your-groq-key-here   # recommended fallback
+GROQ_API_KEY=your-groq-key-here
+GEMINI_API_KEY=your-gemini-key-here   # automatic fallback
 ```
 
 Optional extra backups: `OPENAI_API_KEY` and `OPENROUTER_API_KEY`.
@@ -112,7 +113,7 @@ Open the `android/` folder in Android Studio and run it on a device or emulator.
 ```json
 {
   "text": "Today I am feeling a little low.",
-  "provider": "gemini"
+  "provider": "groq"
 }
 ```
 
