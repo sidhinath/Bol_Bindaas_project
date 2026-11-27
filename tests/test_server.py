@@ -243,7 +243,7 @@ class ConfigTests(unittest.TestCase):
             self.assertEqual(server.provider_key("openrouter"), "openrouter-key")
             self.assertEqual(
                 server.configured_providers(),
-                ["gemini", "openai", "groq", "openrouter"],
+                ["gemini", "groq", "openai", "openrouter"],
             )
 
     def test_unknown_provider_selection_falls_back_to_auto(self):
@@ -862,15 +862,15 @@ class MultiProviderTests(unittest.TestCase):
     def test_auto_chain_is_gemini_first_and_provider_names_are_normalized(self):
         self.assertEqual(
             server.provider_chain("auto"),
-            ("gemini", "openai", "groq", "openrouter"),
+            ("gemini", "groq", "openai", "openrouter"),
         )
         self.assertEqual(server.normalize_provider(" OpenAI "), "openai")
         self.assertEqual(server.normalize_provider("unknown"), "auto")
         self.assertEqual(server.provider_chain("groq"), ("groq",))
 
-    def test_gemini_429_switches_immediately_to_openai(self):
+    def test_gemini_429_switches_immediately_to_groq(self):
         errors = [make_http_error(429, "Quota exceeded")]
-        responses = [FakeResponse(chat_payload("Switched to OpenAI."))]
+        responses = [FakeResponse(chat_payload("Switched to Groq."))]
         output = io.StringIO()
 
         with patch.object(
@@ -879,19 +879,21 @@ class MultiProviderTests(unittest.TestCase):
             timings = {}
             result = server.call_ai("test", "normal", timings)
 
-        self.assertEqual(result, "Switched to OpenAI.")
-        self.assertEqual(timings["provider"], "openai")
+        self.assertEqual(result, "Switched to Groq.")
+        self.assertEqual(timings["provider"], "groq")
         self.assertEqual(urlopen.call_count, 2)
         self.assertIn(
             "models/gemini-3.5-flash-lite", urlopen.call_args_list[0].args[0].full_url
         )
         self.assertIn(
-            "api.openai.com/v1/chat/completions", urlopen.call_args_list[1].args[0].full_url
+            "api.groq.com/openai/v1/chat/completions",
+            urlopen.call_args_list[1].args[0].full_url,
         )
         self.assertIn("Provider switch: Gemini failed", output.getvalue())
+        self.assertIn("trying Groq", output.getvalue())
         self.assertEqual(self.sleep_mock.call_count, 0)
 
-    def test_gemini_timeout_switches_to_openai_without_extra_wait(self):
+    def test_gemini_timeout_switches_to_groq_without_extra_wait(self):
         with patch.object(
             server.urllib.request,
             "urlopen",
@@ -901,12 +903,11 @@ class MultiProviderTests(unittest.TestCase):
             result = server.call_ai("test", "normal", timings)
 
         self.assertEqual(result, "After timeout.")
-        self.assertEqual(timings["provider"], "openai")
+        self.assertEqual(timings["provider"], "groq")
         self.assertEqual(urlopen.call_count, 2)
         self.assertEqual(self.sleep_mock.call_count, 0)
 
     def test_gemini_network_error_switches_to_groq(self):
-        server.CONFIG["keys"]["openai"] = ""
         with patch.object(
             server.urllib.request,
             "urlopen",
@@ -925,10 +926,10 @@ class MultiProviderTests(unittest.TestCase):
     def test_all_providers_failing_returns_friendly_503(self):
         offline = urllib.error.URLError("offline")
         failures = [
-            make_http_error(429, "Quota exceeded"),
-            make_http_error(503, "High demand"),
-            TimeoutError(),
-            offline,
+            make_http_error(429, "Quota exceeded"),  # Gemini
+            make_http_error(503, "High demand"),     # Groq
+            TimeoutError(),                          # OpenAI
+            offline,                                  # OpenRouter
             offline,
             offline,  # The last provider still uses its own retry budget.
         ]

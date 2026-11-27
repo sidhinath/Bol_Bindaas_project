@@ -173,7 +173,7 @@ async function convertToEnglish() {
         // Show which provider actually answered (Auto may have fallen back).
         const usedProvider = data && data.provider ? data.provider : "";
         providerBadge.textContent = usedProvider
-            ? `via ${PROVIDER_LABELS[usedProvider] || usedProvider}`
+            ? `Powered by ${PROVIDER_LABELS[usedProvider] || usedProvider}`
             : "";
         providerBadge.hidden = !usedProvider;
 

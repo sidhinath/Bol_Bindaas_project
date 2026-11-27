@@ -34,13 +34,14 @@ MAX_RETRY_DELAY_SECONDS = 4
 RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
 TEMPORARY_STATUS_CODES = {429, 500, 502, 503, 504}
 
-# Provider names and the Auto order. Gemini is always tried first.
+# Provider names and the Auto order. Gemini is primary; Groq is the
+# designated fallback. OpenAI/OpenRouter remain optional extra backups.
 PROVIDER_GEMINI = "gemini"
-PROVIDER_OPENAI = "openai"
 PROVIDER_GROQ = "groq"
+PROVIDER_OPENAI = "openai"
 PROVIDER_OPENROUTER = "openrouter"
 PROVIDER_AUTO = "auto"
-PROVIDER_ORDER = (PROVIDER_GEMINI, PROVIDER_OPENAI, PROVIDER_GROQ, PROVIDER_OPENROUTER)
+PROVIDER_ORDER = (PROVIDER_GEMINI, PROVIDER_GROQ, PROVIDER_OPENAI, PROVIDER_OPENROUTER)
 ALLOWED_PROVIDERS = {PROVIDER_AUTO, *PROVIDER_ORDER}
 PROVIDER_LABELS = {
     PROVIDER_GEMINI: "Gemini",

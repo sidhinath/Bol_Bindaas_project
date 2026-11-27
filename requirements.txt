@@ -1,1 +1,3 @@
-# No third-party Python packages are required. The server uses the standard library only.
+# No third-party Python packages are required.
+# Gemini and Groq are called over HTTPS with urllib.request from the standard library;
+# no provider SDKs are needed. Keep this file empty of dependencies.

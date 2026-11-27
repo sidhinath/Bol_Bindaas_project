@@ -193,7 +193,7 @@ test("successful conversion posts trimmed text and tone, then shows English", as
     response: () => ({
       ok: true,
       status: 200,
-      json: async () => ({ text: "  Today I am feeling a little low.  " }),
+      json: async () => ({ text: "  Today I am feeling a little low.  ", provider: "gemini" }),
     }),
   });
   elements.inputText.value = "  aaj mera mood thoda off hai  ";
@@ -220,6 +220,8 @@ test("successful conversion posts trimmed text and tone, then shows English", as
   assert.equal(elements.status.dataset.state, "success");
   assert.equal(elements.convertLabel.textContent, "Convert to English");
   assert.equal(elements.convertBtn.disabled, false);
+  assert.equal(elements.providerBadge.hidden, false);
+  assert.equal(elements.providerBadge.textContent, "Powered by Gemini");
 });
 
 test("selected provider is sent and the responding provider is shown", async () => {
@@ -237,7 +239,7 @@ test("selected provider is sent and the responding provider is shown", async () 
 
   assert.equal(JSON.parse(fetchCalls[0].init.body).provider, "openai");
   assert.equal(elements.providerBadge.hidden, false);
-  assert.equal(elements.providerBadge.textContent, "via OpenRouter");
+  assert.equal(elements.providerBadge.textContent, "Powered by OpenRouter");
 });
 
 test("provider badge is cleared with the output", async () => {
@@ -251,7 +253,7 @@ test("provider badge is cleared with the output", async () => {
   elements.inputText.value = "kuch bataon";
 
   await fire(elements.convertBtn, "click");
-  assert.equal(elements.providerBadge.textContent, "via Groq");
+  assert.equal(elements.providerBadge.textContent, "Powered by Groq");
 
   await fire(elements.clearBtn, "click");
   assert.equal(elements.providerBadge.hidden, true);
