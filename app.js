@@ -177,6 +177,10 @@ async function convertToEnglish(stream) {
         return;
     }
 
+    // AbortController for 15-second timeout
+    const abortCtrl = new AbortController();
+    const timeoutTimeout = setTimeout(() => abortCtrl.abort(), 15000);
+
     setBusy(true);
     startBusyFeedback();
     outputCard.classList.add("is-loading");
@@ -193,8 +197,11 @@ async function convertToEnglish(stream) {
         const response = await fetch(API_ENDPOINT, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(body)
+            body: JSON.stringify(body),
+            signal: abortCtrl.signal
         });
+
+        clearTimeout(timeoutTimeout);
 
         // Standard JSON mode (existing behaviour).
         if (!stream) {
@@ -258,6 +265,8 @@ async function convertToEnglish(stream) {
             : error.message;
         setStatus(message || "Something went wrong. Please try again.", "error");
     } finally {
+        abortCtrl.abort();
+        clearTimeout(timeoutTimeout);
         stopBusyFeedback();
         setBusy(false);
         outputCard.classList.remove("is-loading");
