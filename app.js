@@ -258,8 +258,7 @@ async function convertToEnglish(stream) {
             setStatus(`Streaming complete — here is your English version.`, "success");
             return;
         }
-
-        catch (error) {
+    } catch (error) {
         const message = error instanceof TypeError
             ? "Cannot reach the app server. Is server.py running?"
             : error.message;
