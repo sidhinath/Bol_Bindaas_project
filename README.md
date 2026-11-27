@@ -1,5 +1,14 @@
 # BolBindaas — Say it in Hinglish. Write it in English.
 
+<!-- Shields.io badges -->
+[![Production](https://img.shields.io/badge/Production-Live-brightgreen?style=flat)](https://bol-bindaas-project.onrender.com)
+[![Tests](https://img.shields.io/badge/Tests-71_Passing-brightgreen?style=flat)]()
+[![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat&logo=python&logoColor=white)]()
+[![Frontend](https://img.shields.io/badge/Frontend-HTML5%20%7C%20CSS3%20%7C%20JS-F7DF1E?style=flat)]()
+[![Mobile](https://img.shields.io/badge/Android_APK-Capacitor-119EFF?style=flat&logo=android&logoColor=white)](https://github.com/sidhinath/Bol_Bindaas_project/releases/latest)
+[![AI Engine](https://img.shields.io/badge/AI-Groq_Llama_3.3_70B_%7C_Gemini-8B5CF6?style=flat)]()
+[![License](https://img.shields.io/badge/License-MIT-F59E0B?style=flat)]()
+
 BolBindaas turns Hinglish thoughts into clean, natural English. Type or speak in Roman Hindi, choose a tone, and get a polished English version that keeps the original meaning and emotion.
 
 ## Live Links
