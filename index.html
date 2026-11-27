@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -11,7 +11,7 @@
 </head>
 <body>
   <div class="app-shell">
-    <!-- Header -->
+    <!-- Top Header -->
     <header class="navbar">
       <div class="brand">
         <div class="brand-logo">B</div>
@@ -22,13 +22,15 @@
       </div>
 
       <div class="nav-controls">
-        <select id="modelSelect" class="model-select" aria-label="AI Model">
+        <select id="provider" class="provider-select" aria-label="AI Provider">
           <option value="auto" selected>AI Auto</option>
-          <option value="fast">Fast</option>
-          <option value="quality">Pro</option>
+          <option value="gemini">Gemini</option>
+          <option value="openai">OpenAI</option>
+          <option value="groq">Groq</option>
+          <option value="openrouter">OpenRouter</option>
         </select>
 
-        <button id="themeToggle" class="icon-btn" title="Toggle theme" aria-label="Toggle theme">
+        <button type="button" id="themeToggle" class="icon-btn" title="Toggle theme" aria-label="Toggle theme">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>
           </svg>
@@ -36,69 +38,84 @@
       </div>
     </header>
 
-    <!-- Main Workspace -->
+    <!-- Main Editor Card -->
     <main class="workspace">
       <div class="editor-card">
-        <!-- Tone Selector Bar -->
-        <div class="tone-toolbar" role="tablist" aria-label="Select writing tone">
+        <!-- Tone Pill Selector (synced with hidden #tone input) -->
+        <div class="tone-toolbar">
           <span class="tone-label">Tone:</span>
-          <div class="tone-pills" id="tonePills">
-            <button type="button" class="tone-pill active" data-tone="Casual">Casual</button>
-            <button type="button" class="tone-pill" data-tone="Professional">Professional</button>
-            <button type="button" class="tone-pill" data-tone="Polite">Polite</button>
-            <button type="button" class="tone-pill" data-tone="Direct">Direct</button>
-            <button type="button" class="tone-pill" data-tone="Empathetic">Empathetic</button>
+          <input type="hidden" id="tone" value="direct" />
+          <div class="tone-pills" role="tablist" aria-label="Select tone">
+            <button type="button" class="tone-pill" data-tone="casual">Casual</button>
+            <button type="button" class="tone-pill" data-tone="professional">Professional</button>
+            <button type="button" class="tone-pill" data-tone="polite">Polite</button>
+            <button type="button" class="tone-pill is-active" data-tone="direct">Direct</button>
+            <button type="button" class="tone-pill" data-tone="empathetic">Empathetic</button>
           </div>
         </div>
 
-        <!-- Split Panes -->
+        <!-- Two-Column Split Workspace -->
         <div class="split-grid">
           <!-- Left Pane: Input -->
           <section class="pane input-pane">
             <div class="pane-header">
               <label for="inputText" class="pane-title">Your thought</label>
-              <span id="charCount" class="char-counter">0 / 4000</span>
+              <div class="pane-meta">
+                <span id="counter" class="char-counter">0 / 4000</span>
+                <button type="button" id="inputClearBtn" class="text-clear-btn" title="Clear input">Clear</button>
+              </div>
             </div>
 
-            <textarea
-              id="inputText"
-              class="editor-textarea"
-              maxlength="4000"
-              placeholder="Write your thought in Hinglish... (e.g., Kal meeting thoda late rakhte hain kya?)"
-            ></textarea>
+            <div class="textarea-wrapper">
+              <textarea
+                id="inputText"
+                class="editor-textarea"
+                maxlength="4000"
+                placeholder="Write your thought in Hinglish... (e.g., Kal meeting thoda late rakhte hain kya?)"
+              ></textarea>
+            </div>
+
+            <!-- Voice Listening Indicator & Note -->
+            <div class="mic-feedback">
+              <span id="listening" class="listening-badge" hidden>● Listening...</span>
+              <span id="micNote" class="mic-note"></span>
+            </div>
 
             <div class="pane-footer input-footer">
-              <button type="button" id="speakBtn" class="btn btn-secondary">
+              <button type="button" id="micBtn" class="btn btn-secondary">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
                   <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
                   <line x1="12" x2="12" y1="19" y2="22"/>
                 </svg>
-                <span>Speak</span>
+                <span id="micLabel">Speak</span>
               </button>
 
               <button type="button" id="convertBtn" class="btn btn-primary">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/>
                 </svg>
-                <span>Convert to English</span>
+                <span id="convertLabel">Convert to English</span>
               </button>
             </div>
           </section>
 
           <!-- Right Pane: Output -->
-          <section class="pane output-pane">
+          <section id="outputCard" class="pane output-pane">
             <div class="pane-header">
               <span class="pane-title">English version</span>
-              <span id="statusText" class="status-badge">Ready</span>
+              <div class="pane-meta">
+                <span id="providerBadge" class="provider-badge" hidden></span>
+                <span id="outputStatus" class="output-status"></span>
+              </div>
             </div>
 
-            <div id="outputText" class="output-display placeholder" tabindex="0">
+            <div id="outputText" class="output-display is-placeholder" tabindex="0">
               Your clean, natural English will appear here.
             </div>
 
             <div class="pane-footer output-footer">
-              <button type="button" id="copyBtn" class="btn btn-secondary">
+              <button type="button" id="copyBtn" class="btn btn-secondary" disabled>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <rect width="14" height="14" x="8" y="8" rx="2" ry="2"/>
                   <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>
@@ -106,7 +123,7 @@
                 <span>Copy</span>
               </button>
 
-              <button type="button" id="listenBtn" class="btn btn-secondary">
+              <button type="button" id="listenBtn" class="btn btn-secondary" disabled>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
                   <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
@@ -115,7 +132,7 @@
                 <span>Listen</span>
               </button>
 
-              <button type="button" id="clearBtn" class="btn btn-secondary">
+              <button type="button" id="clearBtn" class="btn btn-secondary" disabled>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M18 6 6 18"/>
                   <path d="m6 6 12 12"/>
@@ -124,6 +141,11 @@
               </button>
             </div>
           </section>
+        </div>
+
+        <!-- Bottom Status Bar -->
+        <div class="status-bar">
+          <span id="status" class="status-text" data-state="idle">Ready when you are.</span>
         </div>
       </div>
 
