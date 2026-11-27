@@ -207,75 +207,50 @@ async function convertToEnglish(stream) {
 
         clearTimeout(timeoutTimeout);
 
-        // Standard JSON mode: parse clean JSON payload from server.
-        if (!stream) {
-            let raw;
-            try {
-                raw = await response.text();
-            } catch {
-                throw new Error("The server sent an unreadable response. Check the server terminal.");
-            }
-
-            let data;
-            try {
-                data = JSON.parse(raw);
-            } catch {
-                throw new Error("The server sent an unreadable response. Check the server terminal.");
-            }
-
-            if (!response.ok) {
-                throw new Error(data && data.error ? data.error : `Request failed (${response.status}).`);
-            }
-
-            const result = (data.text || data.translation || data.result || data.output || "").trim();
-            if (!result) {
-                throw new Error("The conversion came back empty. Please try again.");
-            }
-
-            currentOutput = result;
-            outputText.textContent = result;
-            outputText.classList.remove("is-placeholder");
-            [copyBtn, listenBtn, clearBtn].forEach((button) => { button.disabled = false; });
-
-            // Show which provider actually answered (Auto may have fallen back).
-            const usedProvider = data && data.provider ? data.provider : "";
-            if (providerBadge) {
-                providerBadge.textContent = usedProvider
-                    ? `Powered by ${PROVIDER_LABELS[usedProvider] || usedProvider}`
-                    : "";
-                providerBadge.hidden = !usedProvider;
-            }
-
-            setStatus(`Done!`, "success");
-            return;
+        // Standard JSON mode: parse clean JSON payload from server (no stream wrapper needed).
+        let raw;
+        try {
+            raw = await response.text();
+        } catch {
+            throw new Error("The server sent an unreadable response. Check the server terminal.");
         }
 
-        // Streaming mode: pipe tokens into #outputText as they arrive.
-        if (stream && response.body && "stream" in response) {
-            const reader = response.body.getReader();
-            const textDecoder = new TextDecoder();
-            outputCard.classList.add("is-loading");
-            setStatus("Streaming translation...", "loading");
-
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                const chunk = textDecoder.decode(value);
-                // Accumulate and display each received chunk.
-                currentOutput += chunk;
-                outputText.textContent = currentOutput || PLACEHOLDER;
-                outputText.classList.remove("is-placeholder");
-                [copyBtn, listenBtn, clearBtn].forEach((button) => { button.disabled = false; });
-            }
-
-            setStatus(`Streaming complete — here is your English version.`, "success");
-            return;
+        let data;
+        try {
+            data = JSON.parse(raw);
+        } catch {
+            throw new Error("The server sent an unreadable response. Check the server terminal.");
         }
+
+        if (!response.ok) {
+            throw new Error(data && data.error ? data.error : `Request failed (${response.status}).`);
+        }
+
+        const result = (data.text || data.translation || data.result || data.output || "").trim();
+        if (!result) {
+            throw new Error("The conversion came back empty. Please try again.");
+        }
+
+        currentOutput = result;
+        outputText.textContent = result;
+        outputText.classList.remove("is-placeholder");
+        [copyBtn, listenBtn, clearBtn].forEach((button) => { button.disabled = false; });
+
+        // Show which provider actually answered (Auto may have fallen back).
+        const usedProvider = data && data.provider ? data.provider : "";
+        if (providerBadge) {
+            providerBadge.textContent = usedProvider
+                ? `Powered by ${PROVIDER_LABELS[usedProvider] || usedProvider}`
+                : "";
+            providerBadge.hidden = !usedProvider;
+        }
+
+        setStatus(`Done!`, "success");
+        return;
     } catch (error) {
         // Surface exact JS error on screen so nothing fails silently
         setStatus("JS Error: " + error.message, "error");
     } finally {
-        abortCtrl.abort();
         clearTimeout(timeoutTimeout);
         stopBusyFeedback();
         setBusy(false);
