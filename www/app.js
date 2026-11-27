@@ -209,9 +209,16 @@ async function convertToEnglish(stream) {
 
         // Standard JSON mode: parse clean JSON payload from server.
         if (!stream) {
+            let raw;
+            try {
+                raw = await response.text();
+            } catch {
+                throw new Error("The server sent an unreadable response. Check the server terminal.");
+            }
+
             let data;
             try {
-                data = await response.json();
+                data = JSON.parse(raw);
             } catch {
                 throw new Error("The server sent an unreadable response. Check the server terminal.");
             }
@@ -220,7 +227,7 @@ async function convertToEnglish(stream) {
                 throw new Error(data && data.error ? data.error : `Request failed (${response.status}).`);
             }
 
-            const result = data && typeof data.text === "string" ? data.text : "";
+            const result = (data.text || data.translation || data.result || data.output || "").trim();
             if (!result) {
                 throw new Error("The conversion came back empty. Please try again.");
             }
@@ -239,7 +246,7 @@ async function convertToEnglish(stream) {
                 providerBadge.hidden = !usedProvider;
             }
 
-            setStatus(`Done in ${elapsedSeconds()}s — here is your English version.`, "success");
+            setStatus(`Done!`, "success");
             return;
         }
 
