@@ -18,7 +18,7 @@ BolBindaas converts Hinglish (Hindi in Roman English) into clean, natural Englis
 - Copy output to clipboard
 - Listen to output with text-to-speech (`en-US`)
 - Clear / New reset
-- Loading, empty-input, offline, and API error handling
+- Loading feedback with elapsed time, empty-input, offline, and API error handling
 - Responsive UI with light/dark theme
 
 ## How it works
@@ -84,6 +84,7 @@ AI_MODEL=gemini-3.5-flash-lite
 # AI_FALLBACK_MODEL=gemini-3.1-flash-lite  # optional, lighter backup model
 # AI_MAX_ATTEMPTS=3                        # optional, 1-5
 # AI_TIMEOUT_SECONDS=30                    # optional, 5-120
+# AI_ALLOW_LEGACY_MODEL=1                  # keep an older pinned model instead of auto-upgrading
 # AI_BASE_URL=https://generativelanguage.googleapis.com/v1beta  # optional override
 ```
 
@@ -124,7 +125,14 @@ npm run test:coverage
 
 Node prints frontend coverage to the terminal. Python writes a line-coverage report for `server.py` to `.coverage/server.py.cover`.
 
-The backend tests mock Gemini locally, so retries, fallback, and overload responses are covered without an API key. Render logs include the selected model, payload size, response status, elapsed time, and every retry attempt.
+The backend tests mock Gemini locally, so retries, fallback, and overload responses are covered without an API key. Render logs include the selected model, payload size, response status, elapsed time, token usage, and every retry attempt.
+
+## Performance
+
+- Uses the fastest supported translation model (`gemini-3.5-flash-lite`) and automatically upgrades slow legacy model values left in Render.
+- Sends a compact instruction with no filler and caps output at 1024 tokens; full payload logging is opt-in via `AI_DEBUG=1`.
+- Logs `/api/convert` total time and Gemini time in milliseconds, and returns `Server-Timing` / `X-Response-Time-Ms` response headers.
+- The button shows elapsed time while converting, and the output panel has an animated loading indicator.
 
 ## Deployment
 
@@ -134,7 +142,7 @@ Deploy as a Python web service on Render:
 - Build command: `pip install -r requirements.txt`
 - Start command: `python server.py`
 - Health check: `/api/health`
-- Environment variables: `AI_API_KEY` (Gemini key), `AI_MODEL` (default `gemini-3.5-flash-lite`), `AI_FALLBACK_MODEL` (default `gemini-3.1-flash-lite`), `AI_MAX_ATTEMPTS` (default `3`), `AI_TIMEOUT_SECONDS` (default `30`), `AI_DEBUG` (set `1` to include raw Gemini details in browser responses), `HOST=0.0.0.0`, `PORT` (set by Render)
+- Environment variables: `AI_API_KEY` (Gemini key), `AI_MODEL` (default `gemini-3.5-flash-lite`; older `gemini-3.8-flash`/`3.6-flash` values are auto-upgraded for speed), `AI_ALLOW_LEGACY_MODEL` (set `1` to keep them), `AI_FALLBACK_MODEL` (default `gemini-3.1-flash-lite`), `AI_MAX_ATTEMPTS` (default `3`), `AI_TIMEOUT_SECONDS` (default `30`), `AI_DEBUG` (set `1` to include raw Gemini details in browser responses), `HOST=0.0.0.0`, `PORT` (set by Render)
 
 ## Usage examples
 

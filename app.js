@@ -28,6 +28,8 @@ const themeToggle = document.getElementById("themeToggle");
 let currentOutput = "";
 let statusTimer;
 let outputStatusTimer;
+let busyTimer;
+let requestStartedAt = 0;
 
 // Speech recognition state
 let recognition = null;
@@ -64,7 +66,26 @@ function updateCounter() {
 function setBusy(busy) {
     convertBtn.disabled = busy;
     convertBtn.classList.toggle("is-busy", busy);
-    convertLabel.textContent = busy ? "Converting..." : "Convert to English";
+    if (!busy) convertLabel.textContent = "Convert to English";
+}
+
+function startBusyFeedback() {
+    clearInterval(busyTimer);
+    requestStartedAt = Date.now();
+    convertLabel.textContent = "Converting... 0.0s";
+    busyTimer = setInterval(() => {
+        const seconds = ((Date.now() - requestStartedAt) / 1000).toFixed(1);
+        convertLabel.textContent = `Converting... ${seconds}s`;
+    }, 100);
+}
+
+function stopBusyFeedback() {
+    clearInterval(busyTimer);
+    busyTimer = null;
+}
+
+function elapsedSeconds() {
+    return ((Date.now() - requestStartedAt) / 1000).toFixed(1);
 }
 
 function clearOutput() {
@@ -102,6 +123,7 @@ async function convertToEnglish() {
     }
 
     setBusy(true);
+    startBusyFeedback();
     outputCard.classList.add("is-loading");
     setStatus("Turning your thought into natural English...", "loading");
     setOutputStatus("");
@@ -133,13 +155,14 @@ async function convertToEnglish() {
         outputText.textContent = result;
         outputText.classList.remove("is-placeholder");
         [copyBtn, listenBtn, clearBtn].forEach((button) => { button.disabled = false; });
-        setStatus("Done — here is your English version.", "success");
+        setStatus(`Done in ${elapsedSeconds()}s — here is your English version.`, "success");
     } catch (error) {
         const message = error instanceof TypeError
             ? "Cannot reach the app server. Is server.py running?"
             : error.message;
         setStatus(message || "Something went wrong. Please try again.", "error");
     } finally {
+        stopBusyFeedback();
         setBusy(false);
         outputCard.classList.remove("is-loading");
     }

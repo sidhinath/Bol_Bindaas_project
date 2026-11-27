@@ -23,6 +23,9 @@ DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
 # minimal thinking by default, so no unsupported thinkingConfig is sent.
 DEFAULT_MODEL = "gemini-3.5-flash-lite"
 DEFAULT_FALLBACK_MODEL = "gemini-3.1-flash-lite"
+# Legacy Flash tiers are much slower for this translation-style workload.
+LEGACY_MODELS = {"gemini-3.8-flash", "gemini-3.6-flash"}
+MAX_OUTPUT_TOKENS = 1024
 DEFAULT_TIMEOUT_SECONDS = 30
 DEFAULT_MAX_ATTEMPTS = 3
 RETRY_BASE_DELAY_SECONDS = 1
@@ -33,13 +36,12 @@ TEMPORARY_STATUS_CODES = {429, 500, 502, 503, 504}
 GEMINI_TIMEOUT_SECONDS = DEFAULT_TIMEOUT_SECONDS
 MAX_ATTEMPTS = DEFAULT_MAX_ATTEMPTS
 
-# System prompt is kept server-side and sent verbatim with every request.
+# Short instruction that keeps every quality constraint but removes filler.
 SYSTEM_PROMPT = (
-    "You are a Hinglish-to-English writer. The user will give text in Hinglish "
-    "(Hindi in Roman script mixed with English). Rewrite it as clear, natural, "
-    "grammatically correct English that preserves the exact meaning, emotion, "
-    "and tone. Output ONLY the English text, with no explanations, no quotes, "
-    "no preamble."
+    "Rewrite Hinglish (Hindi in Roman script mixed with English) as clear, "
+    "natural, grammatically correct English. Preserve the exact meaning, "
+    "emotion, and tone. Output only the English text — no explanations, "
+    "quotes, or preamble."
 )
 
 ALLOWED_TONES = {"normal", "formal", "casual", "poetic"}
@@ -83,6 +85,19 @@ def log_exception(label: str, error: BaseException) -> None:
     """Print an exception and its full traceback to the platform logs."""
     log(f"{label}: {type(error).__name__}: {error}")
     log(traceback.format_exc())
+
+
+def log_usage(data: dict) -> None:
+    """Report Gemini token counts when the API supplies usageMetadata."""
+    usage = data.get("usageMetadata") if isinstance(data, dict) else None
+    if not isinstance(usage, dict):
+        return
+    log(
+        "Gemini usage: "
+        f"prompt_tokens={usage.get('promptTokenCount', '?')} "
+        f"output_tokens={usage.get('candidatesTokenCount', '?')} "
+        f"total_tokens={usage.get('totalTokenCount', '?')}"
+    )
 
 
 def env_flag(name: str, default: bool) -> bool:
@@ -197,6 +212,12 @@ def configure() -> None:
     if model.lower().startswith(("gpt-", "o1", "o3", "o4")):
         log(f"Ignoring old OpenAI AI_MODEL={model!r}; using {DEFAULT_MODEL}.")
         model = DEFAULT_MODEL
+    elif model.lower() in LEGACY_MODELS and not env_flag("AI_ALLOW_LEGACY_MODEL", False):
+        log(
+            f"Switching slow legacy AI_MODEL={model!r} to {DEFAULT_MODEL} "
+            "for faster translation. Set AI_ALLOW_LEGACY_MODEL=1 to keep it."
+        )
+        model = DEFAULT_MODEL
     CONFIG["model"] = model or DEFAULT_MODEL
 
     fallback = os.getenv("AI_FALLBACK_MODEL", DEFAULT_FALLBACK_MODEL).strip()
@@ -245,7 +266,8 @@ def call_gemini_once(
         f"endpoint={endpoint} payload_bytes={len(body)} "
         f"timeout_seconds={GEMINI_TIMEOUT_SECONDS}"
     )
-    log(f"Gemini request payload: {body.decode('utf-8')}")
+    if DEBUG:
+        log(f"Gemini request payload: {body.decode('utf-8')}")
 
     raw_response = None
     response_status = None
@@ -261,7 +283,9 @@ def call_gemini_once(
                 f"elapsed_seconds={time.monotonic() - attempt_started:.2f}"
             )
             log(f"Gemini response body: {raw_response}")
-            return json.loads(raw_response)
+            data = json.loads(raw_response)
+            log_usage(data)
+            return data
     except urllib.error.HTTPError as error:
         raw_response = error.read().decode("utf-8", errors="replace")
         response_status = error.code
@@ -364,9 +388,10 @@ def extract_content(data: dict, model: str, overall_started: float) -> str:
     return content.strip()
 
 
-def call_ai(text: str, tone: str) -> str:
+def call_ai(text: str, tone: str, timings: dict | None = None) -> str:
     """Send text to Gemini with retries, backoff, and a lighter-model fallback."""
     overall_started = time.monotonic()
+    timings = timings if timings is not None else {}
 
     if not CONFIG["key"]:
         message = (
@@ -381,7 +406,7 @@ def call_ai(text: str, tone: str) -> str:
     payload = {
         "system_instruction": {"parts": [{"text": SYSTEM_PROMPT}]},
         "contents": [{"role": "user", "parts": [{"text": user_content}]}],
-        "generationConfig": {"maxOutputTokens": 1200},
+        "generationConfig": {"maxOutputTokens": MAX_OUTPUT_TOKENS},
     }
     # Compact JSON keeps each retry payload small; no thinking config is sent.
     body = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
@@ -390,7 +415,9 @@ def call_ai(text: str, tone: str) -> str:
         model = model_for_attempt(attempt)
         try:
             data = call_gemini_once(body, model, attempt, overall_started)
-            return extract_content(data, model, overall_started)
+            result = extract_content(data, model, overall_started)
+            timings["gemini_ms"] = round((time.monotonic() - overall_started) * 1000)
+            return result
         except ApiError as error:
             log(
                 f"Gemini attempt failed: attempt={attempt}/{MAX_ATTEMPTS} "
@@ -401,6 +428,7 @@ def call_ai(text: str, tone: str) -> str:
             )
 
             if not error.retryable or attempt >= MAX_ATTEMPTS:
+                timings["gemini_ms"] = round((time.monotonic() - overall_started) * 1000)
                 final_error = friendly_error(error)
                 log(
                     f"Gemini final error: status={final_error.status} "
@@ -444,6 +472,7 @@ class AppHandler(SimpleHTTPRequestHandler):
         super().do_GET()
 
     def do_POST(self):
+        self.request_started = time.monotonic()
         if self.path.split("?", 1)[0] != "/api/convert":
             self.send_json(404, {"error": "Not found."})
             return
@@ -484,10 +513,14 @@ class AppHandler(SimpleHTTPRequestHandler):
             self.send_json(400, {"error": "Unknown tone selection."})
             return
 
+        timings = {}
         try:
-            result = call_ai(text.strip(), tone)
+            result = call_ai(text.strip(), tone, timings)
         except ApiError as error:
-            log(f"/api/convert failed: status={error.status} message={error.message}")
+            log(
+                f"/api/convert failed: status={error.status} "
+                f"total_ms={self.elapsed_ms()} message={error.message}"
+            )
             log_exception("ApiError returned to /api/convert", error)
             self.send_json(error.status, {"error": error.message})
             return
@@ -499,7 +532,15 @@ class AppHandler(SimpleHTTPRequestHandler):
             )
             return
 
+        log(
+            f"/api/convert completed: status=200 total_ms={self.elapsed_ms()} "
+            f"gemini_ms={timings.get('gemini_ms', '?')} output_chars={len(result)}"
+        )
         self.send_json(200, {"text": result})
+
+    def elapsed_ms(self) -> int:
+        started = getattr(self, "request_started", None)
+        return round((time.monotonic() - started) * 1000) if started else 0
 
     def send_json(self, status: int, payload: dict) -> None:
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
@@ -507,6 +548,8 @@ class AppHandler(SimpleHTTPRequestHandler):
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
+        self.send_header("Server-Timing", f"app;dur={self.elapsed_ms()}")
+        self.send_header("X-Response-Time-Ms", str(self.elapsed_ms()))
         self.end_headers()
         self.wfile.write(body)
 

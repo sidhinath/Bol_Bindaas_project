@@ -136,6 +136,8 @@ function loadApp(options = {}) {
     },
     setTimeout,
     clearTimeout,
+    setInterval,
+    clearInterval,
     console,
   };
   sandbox.globalThis = sandbox;
@@ -209,10 +211,38 @@ test("successful conversion posts trimmed text and tone, then shows English", as
   assert.equal(elements.copyBtn.disabled, false);
   assert.equal(elements.listenBtn.disabled, false);
   assert.equal(elements.clearBtn.disabled, false);
-  assert.equal(elements.status.textContent, "Done — here is your English version.");
+  assert.match(elements.status.textContent, /^Done in \d+\.\ds — here is your English version\.$/);
   assert.equal(elements.status.dataset.state, "success");
   assert.equal(elements.convertLabel.textContent, "Convert to English");
   assert.equal(elements.convertBtn.disabled, false);
+});
+
+test("loading state shows elapsed time while waiting and resets afterwards", async () => {
+  let release;
+  const { elements } = loadApp({
+    response: async () => {
+      await new Promise((resolve) => { release = resolve; });
+      return { ok: true, status: 200, json: async () => ({ text: "Ready." }) };
+    },
+  });
+  elements.inputText.value = "aaj mera mood thoda off hai";
+
+  const pending = fire(elements.convertBtn, "click");
+  await tick();
+
+  assert.equal(elements.convertBtn.disabled, true);
+  assert.equal(elements.outputCard.classList.contains("is-loading"), true);
+  assert.match(elements.convertLabel.textContent, /^Converting\.\.\. 0\.0s$/);
+
+  await new Promise((resolve) => setTimeout(resolve, 120));
+  assert.match(elements.convertLabel.textContent, /^Converting\.\.\. \d+\.\ds$/);
+
+  release();
+  await pending;
+
+  assert.equal(elements.convertLabel.textContent, "Convert to English");
+  assert.equal(elements.convertBtn.disabled, false);
+  assert.equal(elements.outputCard.classList.contains("is-loading"), false);
 });
 
 test("API error message is displayed to the user", async () => {

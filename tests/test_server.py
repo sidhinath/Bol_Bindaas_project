@@ -24,11 +24,10 @@ sys.path.insert(0, str(ROOT))
 import server  # noqa: E402
 
 EXPECTED_SYSTEM_PROMPT = (
-    "You are a Hinglish-to-English writer. The user will give text in Hinglish "
-    "(Hindi in Roman script mixed with English). Rewrite it as clear, natural, "
-    "grammatically correct English that preserves the exact meaning, emotion, "
-    "and tone. Output ONLY the English text, with no explanations, no quotes, "
-    "no preamble."
+    "Rewrite Hinglish (Hindi in Roman script mixed with English) as clear, "
+    "natural, grammatically correct English. Preserve the exact meaning, "
+    "emotion, and tone. Output only the English text — no explanations, "
+    "quotes, or preamble."
 )
 
 ENV_KEYS = (
@@ -41,6 +40,7 @@ ENV_KEYS = (
     "AI_TIMEOUT_SECONDS",
     "AI_MAX_ATTEMPTS",
     "AI_DEBUG",
+    "AI_ALLOW_LEGACY_MODEL",
 )
 
 
@@ -222,6 +222,27 @@ class ConfigTests(unittest.TestCase):
             self.assertEqual(server.CONFIG["model"], "gemini-3.5-flash-lite")
             self.assertIn("Ignoring old OpenAI", output.getvalue())
 
+    def test_slow_legacy_model_is_automatically_replaced(self):
+        with patch.dict(os.environ, {"AI_MODEL": "gemini-3.8-flash"}), patch.object(
+            server, "load_env", lambda: None
+        ):
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                server.configure()
+
+            self.assertEqual(server.CONFIG["model"], "gemini-3.5-flash-lite")
+            self.assertIn("Switching slow legacy", output.getvalue())
+
+    def test_legacy_model_can_be_kept_with_an_explicit_opt_in(self):
+        with patch.dict(
+            os.environ,
+            {"AI_MODEL": "gemini-3.8-flash", "AI_ALLOW_LEGACY_MODEL": "1"},
+        ), patch.object(server, "load_env", lambda: None):
+            with contextlib.redirect_stdout(io.StringIO()):
+                server.configure()
+
+            self.assertEqual(server.CONFIG["model"], "gemini-3.8-flash")
+
     def test_custom_gemini_settings_are_used(self):
         with patch.dict(os.environ, {}, clear=False), patch.object(
             server, "load_env", lambda: None
@@ -321,7 +342,7 @@ class CallAiTests(unittest.TestCase):
         self.assertEqual(
             payload["contents"][0]["parts"][0]["text"], "aaj mera mood thoda off hai"
         )
-        self.assertEqual(payload["generationConfig"], {"maxOutputTokens": 1200})
+        self.assertEqual(payload["generationConfig"], {"maxOutputTokens": 1024})
         self.assertNotIn("messages", payload)
         self.assertNotIn("thinkingConfig", payload["generationConfig"])
         self.assertNotIn("thinking_config", payload["generationConfig"])
@@ -338,7 +359,9 @@ class CallAiTests(unittest.TestCase):
             server.call_ai("test", "normal")
 
         raw = urlopen.call_args.args[0].data
-        expected = json.dumps(json.loads(raw.decode("utf-8")), separators=(",", ":"))
+        expected = json.dumps(
+            json.loads(raw.decode("utf-8")), ensure_ascii=False, separators=(",", ":")
+        )
         self.assertEqual(raw.decode("utf-8"), expected)
 
     def test_request_and_response_details_are_logged(self):
@@ -363,6 +386,28 @@ class CallAiTests(unittest.TestCase):
         self.assertIn("status=200", logs)
         self.assertIn("Gemini response body:", logs)
         self.assertIn("Logged answer.", logs)
+
+    def test_token_usage_is_logged_when_available(self):
+        response_body = {
+            "candidates": [{"content": {"parts": [{"text": "Logged usage."}]}}],
+            "usageMetadata": {
+                "promptTokenCount": 42,
+                "candidatesTokenCount": 7,
+                "totalTokenCount": 49,
+            },
+        }
+        output = io.StringIO()
+
+        with patch.object(
+            server.urllib.request, "urlopen", return_value=FakeResponse(response_body)
+        ), contextlib.redirect_stdout(output):
+            server.call_ai("test", "normal")
+
+        logs = output.getvalue()
+        self.assertIn("Gemini usage:", logs)
+        self.assertIn("prompt_tokens=42", logs)
+        self.assertIn("output_tokens=7", logs)
+        self.assertIn("total_tokens=49", logs)
 
     def test_http_error_logs_status_body_and_traceback(self):
         error = urllib.error.HTTPError(
@@ -725,7 +770,7 @@ class HandlerIntegrationTests(unittest.TestCase):
         server.MAX_ATTEMPTS = self.saved_attempts
         server.DEBUG = self.saved_debug
 
-    def send_request(self, path, method="GET", payload=None, raw=None):
+    def send_request(self, path, method="GET", payload=None, raw=None, with_headers=False):
         if raw is not None:
             data = raw.encode("utf-8")
         elif payload is not None:
@@ -741,9 +786,13 @@ class HandlerIntegrationTests(unittest.TestCase):
         )
         try:
             with urllib.request.urlopen(request, timeout=10) as response:
-                return response.status, response.read().decode("utf-8")
+                status, body, headers = response.status, response.read().decode("utf-8"), response.headers
         except urllib.error.HTTPError as error:
-            return error.code, error.read().decode("utf-8")
+            status, body, headers = error.code, error.read().decode("utf-8"), error.headers
+
+        if with_headers:
+            return status, body, headers
+        return status, body
 
     def test_health_endpoint_reports_gemini_configuration(self):
         status, body = self.send_request("/api/health")
@@ -788,9 +837,21 @@ class HandlerIntegrationTests(unittest.TestCase):
             EXPECTED_SYSTEM_PROMPT,
         )
         self.assertEqual(
-            gemini_request["body"]["generationConfig"], {"maxOutputTokens": 1200}
+            gemini_request["body"]["generationConfig"], {"maxOutputTokens": 1024}
         )
         self.assertNotIn("thinkingConfig", gemini_request["body"]["generationConfig"])
+
+    def test_convert_response_includes_timing_headers(self):
+        status, body, headers = self.send_request(
+            "/api/convert",
+            method="POST",
+            payload={"text": "test", "tone": "normal"},
+            with_headers=True,
+        )
+
+        self.assertEqual(status, 200)
+        self.assertRegex(headers.get("X-Response-Time-Ms"), r"^\d+$")
+        self.assertRegex(headers.get("Server-Timing"), r"^app;dur=\d+$")
 
     def test_empty_text_is_rejected_before_calling_gemini(self):
         status, body = self.send_request(
