@@ -41,7 +41,7 @@ DEFAULT_MAX_ATTEMPTS = 3
 RETRY_BASE_DELAY_SECONDS = 1
 MAX_RETRY_DELAY_SECONDS = 4
 RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
-TEMPORARY_STATUS_CODES = {429, 403, 500, 502, 503, 504}
+TEMPORARY_STATUS_CODES = {429, 403, 404, 500, 502, 503, 504}
 
 # Provider names and the Auto order. Groq (llama-3.1-8b-instant) is primary;
 # Gemini is the automatic fallback. OpenAI/OpenRouter remain optional backups.
@@ -73,7 +73,7 @@ PROVIDER_DEFAULTS = {
     },
     PROVIDER_GROQ: {
         "base_url": "https://api.groq.com/openai/v1",
-        "model": "llama-3.3-70b-versatile",
+        "model": "llama-3.1-8b-instant",
         "key_env": "GROQ_API_KEY",
     },
     PROVIDER_OPENROUTER: {

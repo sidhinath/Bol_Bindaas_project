@@ -887,7 +887,7 @@ class MultiProviderTests(unittest.TestCase):
             request.full_url, "https://api.groq.com/openai/v1/chat/completions"
         )
         payload = json.loads(request.data.decode("utf-8"))
-        self.assertEqual(payload["model"], "llama-3.3-70b-versatile")
+        self.assertEqual(payload["model"], "llama-3.1-8b-instant")
 
     def test_groq_429_switches_immediately_to_gemini(self):
         errors = [make_http_error(429, "Quota exceeded")]
