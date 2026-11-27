@@ -11,9 +11,26 @@
   --accent-primary: #6366f1;
   --accent-secondary: #8b5cf6;
   --accent-glow: rgba(99, 102, 241, 0.35);
+  --warning: #f59e0b;
+  --danger: #ef4444;
+  --success: #10b981;
   --radius-lg: 16px;
   --radius-md: 10px;
   --radius-pill: 9999px;
+}
+
+/* Light theme support when app.js toggles theme */
+[data-theme="light"],
+body.light-theme {
+  --bg-page: #f1f5f9;
+  --bg-surface: #ffffff;
+  --bg-surface-hover: #f8fafc;
+  --bg-input: #f8fafc;
+  --border-subtle: rgba(15, 23, 42, 0.12);
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #94a3b8;
+  --accent-glow: rgba(99, 102, 241, 0.22);
 }
 
 * {
@@ -29,13 +46,18 @@ body {
   line-height: 1.6;
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
-/* Fix all SVG icon sizes globally */
+/* Prevent oversized SVGs */
 svg {
   width: 18px;
   height: 18px;
   flex-shrink: 0;
+}
+
+[hidden] {
+  display: none !important;
 }
 
 .app-shell {
@@ -47,13 +69,13 @@ svg {
   min-height: 100vh;
 }
 
-/* Navbar */
+/* Header */
 .navbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding-bottom: 24px;
+  padding-bottom: 22px;
 }
 
 .brand {
@@ -68,7 +90,7 @@ svg {
   height: 38px;
   border-radius: 10px;
   background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
-  color: #fff;
+  color: #ffffff;
   font-weight: 700;
   font-size: 19px;
   display: flex;
@@ -102,7 +124,7 @@ svg {
   flex-shrink: 0;
 }
 
-.model-select {
+.provider-select {
   background-color: var(--bg-surface);
   color: var(--text-primary);
   border: 1px solid var(--border-subtle);
@@ -114,7 +136,7 @@ svg {
   outline: none;
 }
 
-.model-select:focus {
+.provider-select:focus {
   border-color: var(--border-focus);
 }
 
@@ -137,7 +159,7 @@ svg {
   background-color: var(--bg-surface-hover);
 }
 
-/* Main Workspace Card */
+/* Main Card */
 .workspace {
   flex: 1;
   display: flex;
@@ -149,7 +171,7 @@ svg {
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
   overflow: hidden;
-  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.35);
 }
 
 /* Tone Toolbar */
@@ -192,26 +214,27 @@ svg {
 
 .tone-pill:hover {
   color: var(--text-primary);
-  background-color: rgba(255, 255, 255, 0.05);
+  background-color: rgba(128, 128, 128, 0.1);
 }
 
-.tone-pill.active {
+.tone-pill.is-active {
   background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
   color: #ffffff;
   box-shadow: 0 4px 14px var(--accent-glow);
 }
 
-/* Two-Column Split Grid */
+/* Split Panes */
 .split-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
 }
 
 .pane {
-  padding: 22px 24px;
+  padding: 20px 24px;
   display: flex;
   flex-direction: column;
   min-height: 360px;
+  transition: opacity 0.2s ease;
 }
 
 .input-pane {
@@ -222,7 +245,8 @@ svg {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 14px;
+  gap: 10px;
+  margin-bottom: 12px;
 }
 
 .pane-title {
@@ -231,13 +255,59 @@ svg {
   color: var(--text-secondary);
 }
 
-.char-counter,
-.status-badge {
+.pane-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.char-counter {
   font-size: 13px;
   color: var(--text-muted);
 }
 
-/* Textarea & Output Display */
+.text-clear-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 6px;
+}
+
+.text-clear-btn:hover {
+  color: var(--text-primary);
+  background-color: rgba(128, 128, 128, 0.12);
+}
+
+.provider-badge {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--accent-secondary);
+  background: rgba(139, 92, 246, 0.12);
+  border: 1px solid rgba(139, 92, 246, 0.25);
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+}
+
+.output-status {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--success);
+}
+
+.output-status[data-state="error"] {
+  color: var(--danger);
+}
+
+/* Textarea & Output */
+.textarea-wrapper {
+  flex: 1;
+  display: flex;
+}
+
 .editor-textarea {
   width: 100%;
   flex: 1;
@@ -263,32 +333,55 @@ svg {
   border-color: var(--border-focus);
 }
 
+.mic-feedback {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+  min-height: 18px;
+  font-size: 13px;
+}
+
+.listening-badge {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.mic-note {
+  color: var(--text-muted);
+}
+
 .output-display {
   width: 100%;
   flex: 1;
   min-height: 220px;
   padding: 16px;
   border-radius: var(--radius-md);
-  background-color: rgba(255, 255, 255, 0.02);
+  background-color: var(--bg-input);
   border: 1px solid var(--border-subtle);
   font-size: 18px;
   line-height: 1.6;
   color: var(--text-primary);
   white-space: pre-wrap;
   word-break: break-word;
+  transition: opacity 0.2s ease;
 }
 
-.output-display.placeholder {
+.output-display.is-placeholder {
   color: var(--text-muted);
 }
 
-/* Pane Footers & Buttons */
+/* Loading pulse when app.js adds .is-loading to #outputCard */
+#outputCard.is-loading .output-display {
+  opacity: 0.55;
+}
+
+/* Buttons */
 .pane-footer {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-top: 18px;
-  flex-wrap: wrap;
+  margin-top: 16px;
 }
 
 .input-footer {
@@ -315,14 +408,26 @@ svg {
   white-space: nowrap;
 }
 
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
 .btn-secondary {
-  background-color: rgba(255, 255, 255, 0.04);
+  background-color: rgba(128, 128, 128, 0.08);
   border-color: var(--border-subtle);
   color: var(--text-primary);
 }
 
-.btn-secondary:hover {
+.btn-secondary:hover:not(:disabled) {
   background-color: var(--bg-surface-hover);
+}
+
+.btn-secondary.is-active {
+  border-color: var(--accent-secondary);
+  color: var(--accent-secondary);
+  background-color: rgba(139, 92, 246, 0.12);
 }
 
 .btn-primary {
@@ -333,33 +438,57 @@ svg {
   box-shadow: 0 4px 16px var(--accent-glow);
 }
 
-.btn-primary:hover {
+.btn-primary:hover:not(:disabled) {
   filter: brightness(1.08);
   transform: translateY(-1px);
 }
 
+/* Bottom Status Bar inside Card */
+.status-bar {
+  padding: 12px 24px;
+  border-top: 1px solid var(--border-subtle);
+  background-color: rgba(128, 128, 128, 0.03);
+  font-size: 13px;
+}
+
+.status-text {
+  color: var(--text-secondary);
+}
+
+.status-text[data-state="error"] {
+  color: var(--danger);
+}
+
+.status-text[data-state="success"] {
+  color: var(--success);
+}
+
+.status-text[data-state="loading"] {
+  color: var(--accent-secondary);
+}
+
 /* Footer */
 .app-footer {
-  margin-top: 20px;
+  margin-top: 18px;
   text-align: center;
   font-size: 13px;
   color: var(--text-muted);
 }
 
 /* =========================================
-   Mobile & Tablet Responsive Adjustments
+   Mobile & Tablet Responsive Layout
    ========================================= */
 @media (max-width: 820px) {
   .app-shell {
-    padding: 14px 14px 24px;
+    padding: 14px 12px 24px;
   }
 
   .navbar {
-    padding-bottom: 16px;
+    padding-bottom: 14px;
   }
 
   .brand-tagline {
-    display: none; /* Keeps mobile header clean so controls don't wrap awkwardly */
+    display: none;
   }
 
   .tone-toolbar {
@@ -390,7 +519,6 @@ svg {
     border-color: var(--border-subtle);
   }
 
-  /* Stack panes vertically on mobile */
   .split-grid {
     grid-template-columns: 1fr;
   }
@@ -401,36 +529,36 @@ svg {
   }
 
   .pane {
-    padding: 16px;
+    padding: 16px 14px;
     min-height: auto;
   }
 
   .editor-textarea,
   .output-display {
-    min-height: 160px;
+    min-height: 155px;
     font-size: 17px;
   }
 
-  /* Prevent button overflow on small screens */
-  .input-footer {
+  .input-footer { 
     display: grid;
-    grid-template-columns: auto 1fr;
-    gap: 10px;
-  }
-
-  .input-footer .btn-primary {
-    width: 100%;
-  }
-
-  .output-footer {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 8px;
-  }
-
-  .output-footer .btn {
-    padding: 10px 8px;
-    font-size: 13px;
-    gap: 6px;
-  }
+grid-template-columns: auto 1fr;
+gap: 8px;
+}
+.input-footer .btn-primary {
+width: 100%;
+padding: 10px 14px;
+}
+.output-footer {
+display: grid;
+grid-template-columns: repeat(3, 1fr);
+gap: 8px;
+}
+.output-footer .btn {
+padding: 10px 6px;
+font-size: 13px;
+gap: 5px;
+}
+.status-bar {
+padding: 10px 14px;
+}
 }
