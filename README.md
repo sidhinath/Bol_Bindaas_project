@@ -1,8 +1,10 @@
 # BolBindaas - Bol bindaas, English hum sambhal lenge.
 
-## Live Demo
+## Live deployment
 
 🔗 https://bol-bindaas-project.onrender.com
+
+Health check: https://bol-bindaas-project.onrender.com/api/health
 
 ## About
 
@@ -114,21 +116,68 @@ Gemini alone works; add `GROQ_API_KEY` to enable automatic fallback. OpenAI and 
 
 Optional per-provider overrides: `GROQ_MODEL` (default `llama-3.1-8b-instant`), `OPENAI_MODEL` (default `gpt-4o-mini`), `OPENROUTER_MODEL` (default `openai/gpt-4o-mini`), plus matching `<PROVIDER>_BASE_URL` values. See `.env.example` for the full template.
 
-## Gemini + Groq fallback
+## Multi-provider architecture
 
-| Setting | Behavior |
+The deployed app is available at https://bol-bindaas-project.onrender.com. The browser never talks to an AI vendor directly: it sends one request to `server.py`, and the server holds all API keys.
+
+```text
+Browser
+  │  POST /api/convert  { "text": "...", "tone": "direct", "provider": "auto" }
+  ▼
+server.py — server-side key loading and request validation
+  │
+  ├─ 1. Gemini generateContent ................ PRIMARY
+  │      └─ 429 / 503 / timeout / network error ──┐
+  ├─ 2. Groq chat/completions ......... AUTOMATIC FALLBACK ◄┘
+  ├─ 3. OpenAI chat/completions ......... optional backup
+  └─ 4. OpenRouter chat/completions ..... optional backup
+  ▼
+{ "text": "English translation", "provider": "gemini" }
+```
+
+### Provider roles
+
+| Provider | Role | Default model | API key |
+| --- | --- | --- | --- |
+| Gemini | Primary; always tried first in Auto mode | `gemini-3.5-flash-lite` | `GEMINI_API_KEY` |
+| Groq | Automatic fallback for temporary Gemini failures | `llama-3.1-8b-instant` | `GROQ_API_KEY` |
+| OpenAI | Optional extra backup | `gpt-4o-mini` | `OPENAI_API_KEY` |
+| OpenRouter | Optional extra backup | `openai/gpt-4o-mini` | `OPENROUTER_API_KEY` |
+
+### Environment variables
+
+| Variable | Purpose |
 | --- | --- |
-| `AI_PROVIDER=auto` | Gemini → Groq → OpenAI → OpenRouter, skipping providers without a key. Recommended. |
-| `AI_PROVIDER=gemini` / `groq` / `openai` / `openrouter` | Uses only that provider. |
-| Provider dropdown in the UI | Per-request override with the same five choices; sent as `provider` in the request body. |
+| `AI_PROVIDER` | `auto` (recommended) or a fixed `gemini` / `groq` / `openai` / `openrouter` choice. |
+| `GEMINI_API_KEY` | Primary Gemini key. Legacy `AI_API_KEY` and `GOOGLE_API_KEY` are still accepted. |
+| `GROQ_API_KEY` | Enables the automatic Groq fallback. Without it, Auto mode retries Gemini instead. |
+| `OPENAI_API_KEY`, `OPENROUTER_API_KEY` | Optional extra backups after Groq. |
+| `AI_MODEL`, `AI_FALLBACK_MODEL` | Gemini primary and lighter overload model (`gemini-3.1-flash-lite`). |
+| `GROQ_MODEL`, `OPENAI_MODEL`, `OPENROUTER_MODEL` | Optional model overrides for the OpenAI-compatible providers. |
+| `GROQ_BASE_URL`, `OPENAI_BASE_URL`, `OPENROUTER_BASE_URL`, `AI_BASE_URL` | Optional endpoint overrides; defaults are preconfigured. |
+| `AI_MAX_ATTEMPTS`, `AI_TIMEOUT_SECONDS` | Per-provider retry budget and request timeout (defaults `3`, `30`). |
+| `AI_DEBUG` | Set `1` to append raw provider details to browser error responses; server logs are always verbose. |
+| `HOST`, `PORT` | Local/platform binding; Render supplies these in production. |
 
-- If Gemini returns **429**, **503**, times out, or has a network error, Auto mode switches to Groq immediately; other errors are returned with a clear message.
-- Each provider still gets up to `AI_MAX_ATTEMPTS` requests with exponential backoff when no later provider is available.
-- Groq uses an OpenAI-compatible `chat/completions` call with the exact same translation instruction, so quality and output format stay consistent.
-- `POST /api/convert` returns `{ "text": "...", "provider": "groq" }` when Groq answers; the UI shows “Powered by Groq”.
-- `GET /api/health` reports `provider_selection` and the list of configured `providers`.
+Copy `.env.example` to `.env` (see **Setup** above), add at least `GEMINI_API_KEY`, and add `GROQ_API_KEY` to enable fallback. The UI provider dropdown sends a per-request `provider` override with the same five choices as `AI_PROVIDER`.
 
-Keys are never sent to the browser. Logs record the provider chain, attempts, switches, token usage, and response times.
+### Error handling and fallback behavior
+
+- Invalid JSON, an unknown tone, or empty/oversized text returns **400** before any provider is called. A missing key returns **503** with the required environment variable named.
+- In Auto mode, a temporary Gemini failure — **429**, **503**, timeout, or network error — switches immediately to Groq when `GROQ_API_KEY` is configured, then to any later backup with a key.
+- Other provider errors are not silently hidden: they return a clear, user-friendly message instead of cascading through providers.
+- If no later provider is configured, the current provider retries up to `AI_MAX_ATTEMPTS` with exponential backoff; Gemini also tries the lighter `AI_FALLBACK_MODEL` on overload.
+- If every configured provider fails, the last friendly error is returned as **503**. Unexpected server faults are logged and returned as **500**.
+- Every successful response includes `{ "text": "...", "provider": "..." }`, so the UI can show “Powered by Gemini” or “Powered by Groq” even when a fallback answered.
+- `GET /api/health` reports `provider_selection` and the configured `providers` list. Logs record the provider chain, attempts, switches, token usage, and elapsed time.
+
+### Performance notes
+
+- Gemini starts on the fast `gemini-3.5-flash-lite` tier; slow legacy pinned values are upgraded automatically unless `AI_ALLOW_LEGACY_MODEL=1`.
+- All providers receive the same compact translation prompt and a 1024-token output cap, so switching providers preserves meaning, tone handling, and plain-text output format.
+- API calls use only Python's standard-library `urllib.request` — no SDKs or third-party Python packages to install.
+- Immediate switching on temporary failures avoids waiting through a full Gemini retry cycle when Groq is available.
+- `/api/convert` logs total and provider time in milliseconds and returns `Server-Timing` / `X-Response-Time-Ms` headers; the UI shows elapsed time and a loading skeleton while waiting.
 
 ## Run locally
 
@@ -171,11 +220,7 @@ The backend tests mock Gemini and the OpenAI-compatible endpoints locally, so re
 
 ## Performance
 
-- Uses the fastest supported translation model (`gemini-3.5-flash-lite`) and automatically upgrades slow legacy model values left in Render.
-- In Auto mode, a temporary Gemini failure switches immediately to Groq instead of waiting through a full retry cycle.
-- Sends a compact instruction with no filler and caps output at 1024 tokens; full payload logging is opt-in via `AI_DEBUG=1`.
-- Logs `/api/convert` total time and Gemini time in milliseconds, and returns `Server-Timing` / `X-Response-Time-Ms` response headers.
-- The button shows elapsed time while converting, and the output pane has an animated skeleton state.
+The **Performance notes** in the multi-provider architecture section cover the fast Gemini tier, compact shared prompt, immediate Groq fallback, standard-library HTTP calls, timing headers, and loading feedback. Together these keep responses quick without changing output quality or format.
 
 ## Deployment
 
