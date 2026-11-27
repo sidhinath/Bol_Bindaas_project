@@ -11,6 +11,7 @@ const ELEMENT_IDS = [
   "inputText",
   "counter",
   "tone",
+  "provider",
   "convertBtn",
   "convertLabel",
   "status",
@@ -21,6 +22,7 @@ const ELEMENT_IDS = [
   "outputCard",
   "outputText",
   "outputStatus",
+  "providerBadge",
   "copyBtn",
   "listenBtn",
   "clearBtn",
@@ -170,6 +172,8 @@ test("initial UI state is reset and ready", () => {
   assert.equal(elements.convertLabel.textContent, "Convert to English");
   assert.equal(elements.micBtn.hidden, true);
   assert.equal(elements.micNote.hidden, false);
+  assert.equal(elements.providerBadge.hidden, true);
+  assert.equal(elements.providerBadge.textContent, "");
 });
 
 test("empty input shows a validation error and does not call the API", async () => {
@@ -204,6 +208,7 @@ test("successful conversion posts trimmed text and tone, then shows English", as
   assert.deepEqual(JSON.parse(fetchCalls[0].init.body), {
     text: "aaj mera mood thoda off hai",
     tone: "formal",
+    provider: "auto",
   });
 
   assert.equal(elements.outputText.textContent, "Today I am feeling a little low.");
@@ -215,6 +220,42 @@ test("successful conversion posts trimmed text and tone, then shows English", as
   assert.equal(elements.status.dataset.state, "success");
   assert.equal(elements.convertLabel.textContent, "Convert to English");
   assert.equal(elements.convertBtn.disabled, false);
+});
+
+test("selected provider is sent and the responding provider is shown", async () => {
+  const { elements, fetchCalls } = loadApp({
+    response: () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ text: "Fallback answer.", provider: "openrouter" }),
+    }),
+  });
+  elements.inputText.value = "bataon kya hua";
+  elements.provider.value = "openai";
+
+  await fire(elements.convertBtn, "click");
+
+  assert.equal(JSON.parse(fetchCalls[0].init.body).provider, "openai");
+  assert.equal(elements.providerBadge.hidden, false);
+  assert.equal(elements.providerBadge.textContent, "via OpenRouter");
+});
+
+test("provider badge is cleared with the output", async () => {
+  const { elements } = loadApp({
+    response: () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ text: "Answer.", provider: "groq" }),
+    }),
+  });
+  elements.inputText.value = "kuch bataon";
+
+  await fire(elements.convertBtn, "click");
+  assert.equal(elements.providerBadge.textContent, "via Groq");
+
+  await fire(elements.clearBtn, "click");
+  assert.equal(elements.providerBadge.hidden, true);
+  assert.equal(elements.providerBadge.textContent, "");
 });
 
 test("loading state shows elapsed time while waiting and resets afterwards", async () => {

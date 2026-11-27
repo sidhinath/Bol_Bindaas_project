@@ -83,6 +83,22 @@
                     </div>
                 </div>
 
+                <div class="tone-row">
+                    <label for="provider">AI provider</label>
+                    <div class="select-wrap">
+                        <select id="provider">
+                            <option value="auto">Auto (recommended)</option>
+                            <option value="gemini">Gemini</option>
+                            <option value="openai">OpenAI</option>
+                            <option value="groq">Groq</option>
+                            <option value="openrouter">OpenRouter</option>
+                        </select>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="m6 9 6 6 6-6"></path>
+                        </svg>
+                    </div>
+                </div>
+
                 <button class="btn btn--primary" id="convertBtn" type="button">
                     <svg class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                         <path d="m12 3 1.8 4.2L18 9l-4.2 1.8L12 15l-1.8-4.2L6 9l4.2-1.8L12 3Z"></path>
@@ -101,6 +117,7 @@
                         <span class="panel__step">02</span>
                         <h2 id="output-heading">English version</h2>
                     </div>
+                    <span class="provider-badge" id="providerBadge" hidden></span>
                 </div>
 
                 <div class="output-box">

@@ -32,3 +32,12 @@ test("tone options in the markup match the selector values used by the app", () 
   }
   assert.match(app, /tone: toneEl\.value/);
 });
+
+test("provider options and the response badge are wired up", () => {
+  for (const provider of ["auto", "gemini", "openai", "groq", "openrouter"]) {
+    assert.match(html, new RegExp(`<option value="${provider}">`));
+  }
+  assert.match(html, /id="providerBadge"/);
+  assert.match(app, /provider: providerEl\.value \|\| "auto"/);
+  assert.match(app, /data\.provider/);
+});

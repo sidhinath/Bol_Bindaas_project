@@ -5,6 +5,7 @@ at the urllib boundary or replaced by a local HTTP server.
 """
 
 import contextlib
+import copy
 import io
 import json
 import os
@@ -41,6 +42,17 @@ ENV_KEYS = (
     "AI_MAX_ATTEMPTS",
     "AI_DEBUG",
     "AI_ALLOW_LEGACY_MODEL",
+    "AI_PROVIDER",
+    "PROVIDER",
+    "OPENAI_API_KEY",
+    "GROQ_API_KEY",
+    "OPENROUTER_API_KEY",
+    "OPENAI_MODEL",
+    "GROQ_MODEL",
+    "OPENROUTER_MODEL",
+    "OPENAI_BASE_URL",
+    "GROQ_BASE_URL",
+    "OPENROUTER_BASE_URL",
 )
 
 
@@ -115,7 +127,7 @@ class QuietAppHandler(server.AppHandler):
 
 class ConfigTests(unittest.TestCase):
     def setUp(self):
-        self.saved_config = server.CONFIG.copy()
+        self.saved_config = copy.deepcopy(server.CONFIG)
         self.saved_debug = server.DEBUG
         self.saved_timeout = server.GEMINI_TIMEOUT_SECONDS
         self.saved_attempts = server.MAX_ATTEMPTS
@@ -145,6 +157,11 @@ class ConfigTests(unittest.TestCase):
             )
             self.assertEqual(server.CONFIG["model"], "gemini-3.5-flash-lite")
             self.assertEqual(server.CONFIG["fallback_model"], "gemini-3.1-flash-lite")
+            self.assertEqual(server.CONFIG["provider"], "auto")
+            self.assertEqual(
+                server.CONFIG["keys"],
+                {"gemini": "", "openai": "", "groq": "", "openrouter": ""},
+            )
             self.assertEqual(server.GEMINI_TIMEOUT_SECONDS, 30)
             self.assertEqual(server.MAX_ATTEMPTS, 3)
             self.assertFalse(server.DEBUG)
@@ -201,6 +218,67 @@ class ConfigTests(unittest.TestCase):
                     os.environ[variable] = "fallback-key"
                     server.configure()
                     self.assertEqual(server.CONFIG["key"], "fallback-key")
+
+    def test_all_provider_keys_and_selection_are_loaded(self):
+        with patch.dict(os.environ, {}, clear=False), patch.object(
+            server, "load_env", lambda: None
+        ):
+            clear_ai_env()
+            os.environ.update(
+                {
+                    "GEMINI_API_KEY": "gemini-key",
+                    "OPENAI_API_KEY": "openai-key",
+                    "GROQ_API_KEY": "groq-key",
+                    "OPENROUTER_API_KEY": "openrouter-key",
+                    "AI_PROVIDER": "openai",
+                }
+            )
+            with contextlib.redirect_stdout(io.StringIO()):
+                server.configure()
+
+            self.assertEqual(server.CONFIG["provider"], "openai")
+            self.assertEqual(server.provider_key("gemini"), "gemini-key")
+            self.assertEqual(server.provider_key("openai"), "openai-key")
+            self.assertEqual(server.provider_key("groq"), "groq-key")
+            self.assertEqual(server.provider_key("openrouter"), "openrouter-key")
+            self.assertEqual(
+                server.configured_providers(),
+                ["gemini", "openai", "groq", "openrouter"],
+            )
+
+    def test_unknown_provider_selection_falls_back_to_auto(self):
+        with patch.dict(os.environ, {"AI_PROVIDER": "somewhere"}), patch.object(
+            server, "load_env", lambda: None
+        ):
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                server.configure()
+
+            self.assertEqual(server.CONFIG["provider"], "auto")
+            self.assertIn("Ignoring unknown AI_PROVIDER", output.getvalue())
+
+    def test_chat_provider_settings_can_be_overridden(self):
+        with patch.dict(
+            os.environ,
+            {
+                "OPENAI_MODEL": "gpt-4o",
+                "OPENAI_BASE_URL": "https://openai.example/v1",
+                "GROQ_MODEL": "custom-groq-model",
+            },
+        ), patch.object(server, "load_env", lambda: None):
+            with contextlib.redirect_stdout(io.StringIO()):
+                server.configure()
+
+            self.assertEqual(server.provider_setting("openai", "model"), "gpt-4o")
+            self.assertEqual(
+                server.provider_setting("openai", "base_url"),
+                "https://openai.example/v1",
+            )
+            self.assertEqual(server.provider_setting("groq", "model"), "custom-groq-model")
+            self.assertEqual(
+                server.provider_setting("openrouter", "base_url"),
+                "https://openrouter.ai/api/v1",
+            )
 
     def test_stale_openai_base_url_and_model_are_ignored(self):
         with patch.dict(os.environ, {}, clear=False), patch.object(
@@ -277,7 +355,7 @@ class ConfigTests(unittest.TestCase):
 
 class CallAiTests(unittest.TestCase):
     def setUp(self):
-        self.saved_config = server.CONFIG.copy()
+        self.saved_config = copy.deepcopy(server.CONFIG)
         self.saved_timeout = server.GEMINI_TIMEOUT_SECONDS
         self.saved_attempts = server.MAX_ATTEMPTS
         self.saved_debug = server.DEBUG
@@ -287,6 +365,13 @@ class CallAiTests(unittest.TestCase):
                 "base_url": "https://gemini.example/v1beta",
                 "model": "gemini-3.5-flash-lite",
                 "fallback_model": "gemini-3.1-flash-lite",
+                "provider": "auto",
+                "keys": {
+                    "gemini": "test-gemini-key",
+                    "openai": "",
+                    "groq": "",
+                    "openrouter": "",
+                },
             }
         )
         server.GEMINI_TIMEOUT_SECONDS = 30
@@ -491,6 +576,7 @@ class CallAiTests(unittest.TestCase):
 
     def test_missing_api_key_raises_503(self):
         server.CONFIG["key"] = ""
+        server.CONFIG["keys"]["gemini"] = ""
 
         with self.assertRaises(server.ApiError) as raised:
             server.call_ai("test", "normal")
@@ -709,6 +795,289 @@ class CallAiTests(unittest.TestCase):
         self.assertIn("Unexpected Gemini response shape", raised.exception.message)
 
 
+def chat_payload(text="Clean English answer."):
+    """OpenAI-compatible chat completion response."""
+    return {
+        "choices": [
+            {
+                "index": 0,
+                "message": {"role": "assistant", "content": text},
+                "finish_reason": "stop",
+            }
+        ],
+        "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
+    }
+
+
+def make_http_error(status, message, url="https://api.example/v1/chat/completions", headers=None):
+    body = json.dumps({"error": {"message": message}}).encode("utf-8")
+    return urllib.error.HTTPError(url, status, "error", headers or {}, io.BytesIO(body))
+
+
+class MultiProviderTests(unittest.TestCase):
+    """Gemini-first fallback chain with OpenAI-compatible backup providers."""
+
+    def setUp(self):
+        self.saved_config = copy.deepcopy(server.CONFIG)
+        self.saved_timeout = server.GEMINI_TIMEOUT_SECONDS
+        self.saved_attempts = server.MAX_ATTEMPTS
+        self.saved_debug = server.DEBUG
+        server.CONFIG.update(
+            {
+                "key": "gemini-key",
+                "base_url": "https://gemini.example/v1beta",
+                "model": "gemini-3.5-flash-lite",
+                "fallback_model": "gemini-3.1-flash-lite",
+                "provider": "auto",
+                "keys": {
+                    "gemini": "gemini-key",
+                    "openai": "openai-key",
+                    "groq": "groq-key",
+                    "openrouter": "openrouter-key",
+                },
+                "provider_settings": {
+                    name: {
+                        "base_url": server.PROVIDER_DEFAULTS[name]["base_url"],
+                        "model": server.PROVIDER_DEFAULTS[name]["model"],
+                    }
+                    for name in server.PROVIDER_ORDER
+                },
+            }
+        )
+        server.GEMINI_TIMEOUT_SECONDS = 30
+        server.MAX_ATTEMPTS = 3
+        server.DEBUG = False
+
+        self.sleep_patcher = patch.object(server.time, "sleep")
+        self.sleep_mock = self.sleep_patcher.start()
+        self.addCleanup(self.sleep_patcher.stop)
+
+    def tearDown(self):
+        server.CONFIG.clear()
+        server.CONFIG.update(self.saved_config)
+        server.GEMINI_TIMEOUT_SECONDS = self.saved_timeout
+        server.MAX_ATTEMPTS = self.saved_attempts
+        server.DEBUG = self.saved_debug
+
+    def test_auto_chain_is_gemini_first_and_provider_names_are_normalized(self):
+        self.assertEqual(
+            server.provider_chain("auto"),
+            ("gemini", "openai", "groq", "openrouter"),
+        )
+        self.assertEqual(server.normalize_provider(" OpenAI "), "openai")
+        self.assertEqual(server.normalize_provider("unknown"), "auto")
+        self.assertEqual(server.provider_chain("groq"), ("groq",))
+
+    def test_gemini_429_switches_immediately_to_openai(self):
+        errors = [make_http_error(429, "Quota exceeded")]
+        responses = [FakeResponse(chat_payload("Switched to OpenAI."))]
+        output = io.StringIO()
+
+        with patch.object(
+            server.urllib.request, "urlopen", side_effect=errors + responses
+        ) as urlopen, contextlib.redirect_stdout(output):
+            timings = {}
+            result = server.call_ai("test", "normal", timings)
+
+        self.assertEqual(result, "Switched to OpenAI.")
+        self.assertEqual(timings["provider"], "openai")
+        self.assertEqual(urlopen.call_count, 2)
+        self.assertIn(
+            "models/gemini-3.5-flash-lite", urlopen.call_args_list[0].args[0].full_url
+        )
+        self.assertIn(
+            "api.openai.com/v1/chat/completions", urlopen.call_args_list[1].args[0].full_url
+        )
+        self.assertIn("Provider switch: Gemini failed", output.getvalue())
+        self.assertEqual(self.sleep_mock.call_count, 0)
+
+    def test_gemini_timeout_switches_to_openai_without_extra_wait(self):
+        with patch.object(
+            server.urllib.request,
+            "urlopen",
+            side_effect=[TimeoutError(), FakeResponse(chat_payload("After timeout."))],
+        ) as urlopen:
+            timings = {}
+            result = server.call_ai("test", "normal", timings)
+
+        self.assertEqual(result, "After timeout.")
+        self.assertEqual(timings["provider"], "openai")
+        self.assertEqual(urlopen.call_count, 2)
+        self.assertEqual(self.sleep_mock.call_count, 0)
+
+    def test_gemini_network_error_switches_to_groq(self):
+        server.CONFIG["keys"]["openai"] = ""
+        with patch.object(
+            server.urllib.request,
+            "urlopen",
+            side_effect=[
+                urllib.error.URLError("offline"),
+                FakeResponse(chat_payload("Groq answer.")),
+            ],
+        ) as urlopen:
+            timings = {}
+            result = server.call_ai("test", "normal", timings)
+
+        self.assertEqual(result, "Groq answer.")
+        self.assertEqual(timings["provider"], "groq")
+        self.assertIn("api.groq.com/openai/v1/chat/completions", urlopen.call_args.args[0].full_url)
+
+    def test_all_providers_failing_returns_friendly_503(self):
+        offline = urllib.error.URLError("offline")
+        failures = [
+            make_http_error(429, "Quota exceeded"),
+            make_http_error(503, "High demand"),
+            TimeoutError(),
+            offline,
+            offline,
+            offline,  # The last provider still uses its own retry budget.
+        ]
+
+        with patch.object(
+            server.urllib.request, "urlopen", side_effect=failures
+        ) as urlopen:
+            with self.assertRaises(server.ApiError) as raised:
+                server.call_ai("test", "normal")
+
+        self.assertEqual(raised.exception.status, 503)
+        self.assertIn("try again", raised.exception.message)
+        self.assertEqual(urlopen.call_count, 6)
+        self.assertEqual([call.args[0] for call in self.sleep_mock.call_args_list], [1, 2])
+
+    def test_gemini_503_uses_lighter_model_when_no_backup_key_exists(self):
+        server.CONFIG["keys"]["openai"] = ""
+        server.CONFIG["keys"]["groq"] = ""
+        server.CONFIG["keys"]["openrouter"] = ""
+
+        with patch.object(
+            server.urllib.request,
+            "urlopen",
+            side_effect=[
+                make_http_error(503, "High demand"),
+                FakeResponse(
+                    {
+                        "candidates": [
+                            {"content": {"parts": [{"text": "Recovered by Gemini."}]}}
+                        ]
+                    }
+                ),
+            ],
+        ) as urlopen:
+            timings = {}
+            result = server.call_ai("test", "normal", timings)
+
+        self.assertEqual(result, "Recovered by Gemini.")
+        self.assertEqual(timings["provider"], "gemini")
+        self.assertIn("gemini-3.1-flash-lite", urlopen.call_args.args[0].full_url)
+        self.assertEqual(self.sleep_mock.call_args_list[0].args, (1,))
+
+    def test_openai_request_uses_chat_format_bearer_key_and_shared_prompt(self):
+        with patch.object(
+            server.urllib.request,
+            "urlopen",
+            return_value=FakeResponse(chat_payload("OpenAI translation.")),
+        ) as urlopen:
+            timings = {}
+            result = server.call_ai("test", "normal", timings, provider="openai")
+
+        self.assertEqual(result, "OpenAI translation.")
+        self.assertEqual(timings["provider"], "openai")
+        request = urlopen.call_args.args[0]
+        self.assertEqual(
+            request.full_url, "https://api.openai.com/v1/chat/completions"
+        )
+        headers = {key.lower(): value for key, value in request.header_items()}
+        self.assertEqual(headers["authorization"], "Bearer openai-key")
+        payload = json.loads(request.data.decode("utf-8"))
+        self.assertEqual(payload["model"], "gpt-4o-mini")
+        self.assertEqual(payload["messages"][0], {
+            "role": "system", "content": server.SYSTEM_PROMPT
+        })
+        self.assertEqual(payload["messages"][1], {
+            "role": "user", "content": "test"
+        })
+        self.assertEqual(payload["max_tokens"], 1024)
+        self.assertNotIn("system_instruction", payload)
+
+    def test_groq_and_openrouter_use_their_own_endpoints(self):
+        cases = [
+            ("groq", "https://api.groq.com/openai/v1/chat/completions"),
+            ("openrouter", "https://openrouter.ai/api/v1/chat/completions"),
+        ]
+        for provider, endpoint in cases:
+            with self.subTest(provider=provider), patch.object(
+                server.urllib.request,
+                "urlopen",
+                return_value=FakeResponse(chat_payload(f"From {provider}.")),
+            ) as urlopen:
+                result = server.call_ai("test", "normal", {}, provider=provider)
+                request = urlopen.call_args.args[0]
+                self.assertEqual(result, f"From {provider}.")
+                self.assertEqual(request.full_url, endpoint)
+                headers = {key.lower(): value for key, value in request.header_items()}
+                self.assertEqual(headers["authorization"], f"Bearer {provider}-key")
+
+    def test_explicit_provider_does_not_call_gemini(self):
+        with patch.object(
+            server.urllib.request,
+            "urlopen",
+            return_value=FakeResponse(chat_payload("Only OpenAI.")),
+        ) as urlopen:
+            server.call_ai("test", "normal", provider="openai")
+
+        self.assertEqual(urlopen.call_count, 1)
+        self.assertIn("api.openai.com", urlopen.call_args.args[0].full_url)
+
+    def test_explicit_provider_without_key_reports_its_env_variable(self):
+        server.CONFIG["keys"]["groq"] = ""
+
+        with self.assertRaises(server.ApiError) as raised:
+            server.call_ai("test", "normal", provider="groq")
+
+        self.assertEqual(raised.exception.status, 503)
+        self.assertIn("GROQ_API_KEY", raised.exception.message)
+
+    def test_tone_is_preserved_for_chat_providers(self):
+        with patch.object(
+            server.urllib.request,
+            "urlopen",
+            return_value=FakeResponse(chat_payload("Formal answer.")),
+        ) as urlopen:
+            server.call_ai("sir, bhej dunga", "formal", provider="openai")
+
+        payload = json.loads(urlopen.call_args.args[0].data.decode("utf-8"))
+        self.assertEqual(
+            payload["messages"][1]["content"], "Tone: formal\n\nText: sir, bhej dunga"
+        )
+
+    def test_empty_chat_result_is_reported(self):
+        with patch.object(
+            server.urllib.request,
+            "urlopen",
+            return_value=FakeResponse(chat_payload("")),
+        ):
+            with self.assertRaises(server.ApiError) as raised:
+                server.call_ai("test", "normal", provider="openai")
+
+        self.assertEqual(raised.exception.status, 502)
+        self.assertIn("empty result", raised.exception.message)
+
+    def test_chat_usage_is_logged(self):
+        output = io.StringIO()
+        with patch.object(
+            server.urllib.request,
+            "urlopen",
+            return_value=FakeResponse(chat_payload("Logged.")),
+        ), contextlib.redirect_stdout(output):
+            server.call_ai("test", "normal", provider="openai")
+
+        logs = output.getvalue()
+        self.assertIn("OpenAI usage:", logs)
+        self.assertIn("prompt_tokens=10", logs)
+        self.assertIn("output_tokens=5", logs)
+        self.assertIn("total_tokens=15", logs)
+
+
 class HandlerIntegrationTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -735,7 +1104,7 @@ class HandlerIntegrationTests(unittest.TestCase):
         cls.app_thread.join(timeout=5)
 
     def setUp(self):
-        self.saved_config = server.CONFIG.copy()
+        self.saved_config = copy.deepcopy(server.CONFIG)
         self.saved_timeout = server.GEMINI_TIMEOUT_SECONDS
         self.saved_attempts = server.MAX_ATTEMPTS
         self.saved_debug = server.DEBUG
@@ -753,6 +1122,13 @@ class HandlerIntegrationTests(unittest.TestCase):
                 "base_url": f"http://127.0.0.1:{self.mock_port}/v1beta",
                 "model": "gemini-3.5-flash-lite",
                 "fallback_model": "gemini-3.1-flash-lite",
+                "provider": "auto",
+                "keys": {
+                    "gemini": "test-gemini-key",
+                    "openai": "",
+                    "groq": "",
+                    "openrouter": "",
+                },
             }
         )
         server.GEMINI_TIMEOUT_SECONDS = 30
@@ -802,12 +1178,15 @@ class HandlerIntegrationTests(unittest.TestCase):
         self.assertEqual(data["status"], "ok")
         self.assertEqual(data["configured"], True)
         self.assertEqual(data["provider"], "gemini")
+        self.assertEqual(data["provider_selection"], "auto")
+        self.assertEqual(data["providers"], ["gemini"])
         self.assertEqual(data["model"], "gemini-3.5-flash-lite")
         self.assertEqual(data["fallback_model"], "gemini-3.1-flash-lite")
         self.assertEqual(data["attempts"], 3)
 
     def test_health_endpoint_reports_missing_key(self):
         server.CONFIG["key"] = ""
+        server.CONFIG["keys"]["gemini"] = ""
 
         status, body = self.send_request("/api/health")
         data = json.loads(body)
@@ -853,6 +1232,48 @@ class HandlerIntegrationTests(unittest.TestCase):
         self.assertRegex(headers.get("X-Response-Time-Ms"), r"^\d+$")
         self.assertRegex(headers.get("Server-Timing"), r"^app;dur=\d+$")
 
+    def test_convert_response_reports_the_provider_that_answered(self):
+        status, body = self.send_request(
+            "/api/convert",
+            method="POST",
+            payload={"text": "test", "tone": "normal"},
+        )
+
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body)["provider"], "gemini")
+
+    def test_convert_response_can_report_a_fallback_provider(self):
+        def fake_call_ai(text, tone, timings=None, provider=None):
+            timings["provider"] = "openai"
+            return "Answer from OpenAI."
+
+        with patch.object(server, "call_ai", side_effect=fake_call_ai):
+            status, body = self.send_request(
+                "/api/convert",
+                method="POST",
+                payload={
+                    "text": "test",
+                    "tone": "normal",
+                    "provider": "openai",
+                },
+            )
+
+        self.assertEqual(status, 200)
+        data = json.loads(body)
+        self.assertEqual(data["text"], "Answer from OpenAI.")
+        self.assertEqual(data["provider"], "openai")
+
+    def test_unknown_provider_in_request_is_treated_as_auto(self):
+        status, body = self.send_request(
+            "/api/convert",
+            method="POST",
+            payload={"text": "test", "tone": "normal", "provider": "unknown"},
+        )
+
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body)["provider"], "gemini")
+        self.assertEqual(len(MockGeminiHandler.requests), 1)
+
     def test_empty_text_is_rejected_before_calling_gemini(self):
         status, body = self.send_request(
             "/api/convert", method="POST", payload={"text": "   ", "tone": "normal"}
@@ -887,6 +1308,7 @@ class HandlerIntegrationTests(unittest.TestCase):
 
     def test_missing_key_returns_503(self):
         server.CONFIG["key"] = ""
+        server.CONFIG["keys"]["gemini"] = ""
 
         status, body = self.send_request(
             "/api/convert", method="POST", payload={"text": "test", "tone": "normal"}

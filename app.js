@@ -4,10 +4,17 @@
 const API_ENDPOINT = "/api/convert";
 const MAX_CHARS = 4000;
 const PLACEHOLDER = "Your clean, natural English will appear here.";
+const PROVIDER_LABELS = {
+    gemini: "Gemini",
+    openai: "OpenAI",
+    groq: "Groq",
+    openrouter: "OpenRouter"
+};
 
 const inputEl = document.getElementById("inputText");
 const counterEl = document.getElementById("counter");
 const toneEl = document.getElementById("tone");
+const providerEl = document.getElementById("provider");
 const convertBtn = document.getElementById("convertBtn");
 const convertLabel = document.getElementById("convertLabel");
 const statusEl = document.getElementById("status");
@@ -20,6 +27,7 @@ const listeningEl = document.getElementById("listening");
 const outputCard = document.getElementById("outputCard");
 const outputText = document.getElementById("outputText");
 const outputStatus = document.getElementById("outputStatus");
+const providerBadge = document.getElementById("providerBadge");
 const copyBtn = document.getElementById("copyBtn");
 const listenBtn = document.getElementById("listenBtn");
 const clearBtn = document.getElementById("clearBtn");
@@ -97,6 +105,8 @@ function clearOutput() {
     listenBtn.classList.remove("is-active");
     if ("speechSynthesis" in window) window.speechSynthesis.cancel();
     setOutputStatus("");
+    providerBadge.textContent = "";
+    providerBadge.hidden = true;
 }
 
 /* ---------- Conversion ---------- */
@@ -132,7 +142,11 @@ async function convertToEnglish() {
         const response = await fetch(API_ENDPOINT, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ text, tone: toneEl.value })
+            body: JSON.stringify({
+                text,
+                tone: toneEl.value,
+                provider: providerEl.value || "auto"
+            })
         });
 
         let data;
@@ -155,6 +169,14 @@ async function convertToEnglish() {
         outputText.textContent = result;
         outputText.classList.remove("is-placeholder");
         [copyBtn, listenBtn, clearBtn].forEach((button) => { button.disabled = false; });
+
+        // Show which provider actually answered (Auto may have fallen back).
+        const usedProvider = data && data.provider ? data.provider : "";
+        providerBadge.textContent = usedProvider
+            ? `via ${PROVIDER_LABELS[usedProvider] || usedProvider}`
+            : "";
+        providerBadge.hidden = !usedProvider;
+
         setStatus(`Done in ${elapsedSeconds()}s — here is your English version.`, "success");
     } catch (error) {
         const message = error instanceof TypeError
