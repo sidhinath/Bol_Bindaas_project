@@ -203,7 +203,7 @@ async function convertToEnglish(stream) {
 
         clearTimeout(timeoutTimeout);
 
-        // Standard JSON mode (existing behaviour).
+        // Standard JSON mode: parse clean JSON payload from server.
         if (!stream) {
             let data;
             try {
@@ -216,7 +216,7 @@ async function convertToEnglish(stream) {
                 throw new Error(data && data.error ? data.error : `Request failed (${response.status}).`);
             }
 
-            const result = (data && typeof data.text === "string" ? data.text : "") || (data && typeof data.translation === "string" ? data.translation : "") || (data && typeof data.output === "string" ? data.output : "").trim();
+            const result = data && typeof data.text === "string" ? data.text : "";
             if (!result) {
                 throw new Error("The conversion came back empty. Please try again.");
             }
