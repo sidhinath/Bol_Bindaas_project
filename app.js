@@ -68,14 +68,18 @@ let finalTranscript = "";
 
 function setStatus(message, state = "idle") {
     clearTimeout(statusTimer);
-    statusEl.textContent = message;
-    statusEl.dataset.state = state;
+    if (statusEl) {
+        statusEl.textContent = message;
+        statusEl.dataset.state = state;
+    }
 }
 
 function setOutputStatus(message, state = "idle") {
     clearTimeout(outputStatusTimer);
-    outputStatus.textContent = message;
-    outputStatus.dataset.state = state;
+    if (outputStatus) {
+        outputStatus.textContent = message;
+        outputStatus.dataset.state = state;
+    }
 }
 
 function flashOutputStatus(message, state = "success") {
@@ -228,10 +232,12 @@ async function convertToEnglish(stream) {
 
             // Show which provider actually answered (Auto may have fallen back).
             const usedProvider = data && data.provider ? data.provider : "";
-            providerBadge.textContent = usedProvider
-                ? `Powered by ${PROVIDER_LABELS[usedProvider] || usedProvider}`
-                : "";
-            providerBadge.hidden = !usedProvider;
+            if (providerBadge) {
+                providerBadge.textContent = usedProvider
+                    ? `Powered by ${PROVIDER_LABELS[usedProvider] || usedProvider}`
+                    : "";
+                providerBadge.hidden = !usedProvider;
+            }
 
             setStatus(`Done in ${elapsedSeconds()}s — here is your English version.`, "success");
             return;
