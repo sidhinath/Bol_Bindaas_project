@@ -18,6 +18,14 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 MAX_CHARS = 4000
 
+# Allow the Capacitor Android WebView to call the deployed API from a different
+# origin. Preflight is handled by do_OPTIONS below.
+CORS_HEADERS = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type",
+}
+
 # Gemini REST endpoint: POST /v1beta/models/{model}:generateContent
 DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
 # Fastest Gemini tier, recommended for translation/summarization. It uses
@@ -880,6 +888,17 @@ class AppHandler(SimpleHTTPRequestHandler):
             return
         super().do_GET()
 
+    def do_OPTIONS(self):
+        if self.path.split("?", 1)[0] != "/api/convert":
+            self.send_json(404, {"error": "Not found."})
+            return
+
+        self.send_response(204)
+        for name, value in CORS_HEADERS.items():
+            self.send_header(name, value)
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+
     def do_POST(self):
         self.request_started = time.monotonic()
         if self.path.split("?", 1)[0] != "/api/convert":
@@ -962,6 +981,8 @@ class AppHandler(SimpleHTTPRequestHandler):
         self.send_header("Cache-Control", "no-store")
         self.send_header("Server-Timing", f"app;dur={self.elapsed_ms()}")
         self.send_header("X-Response-Time-Ms", str(self.elapsed_ms()))
+        for name, value in CORS_HEADERS.items():
+            self.send_header(name, value)
         self.end_headers()
         self.wfile.write(body)
 

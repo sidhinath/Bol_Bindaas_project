@@ -6,6 +6,9 @@
   "scripts": {
     "start": "python server.py",
     "dev": "python server.py",
+    "sync:web": "node -e \"const fs=require('node:fs');fs.mkdirSync('www',{recursive:true});for(const file of ['index.html','app.js'])fs.copyFileSync(file,'www/'+file)\"",
+    "sync:android": "npm run sync:web && npx cap sync android",
+    "add:android": "npm run sync:web && npx cap add android",
     "test": "python -m unittest discover -s tests -p \"test_*.py\" -v && node --test",
     "test:backend": "python -m unittest discover -s tests -p \"test_*.py\" -v",
     "test:frontend": "node --test",
@@ -18,5 +21,12 @@
   "homepage": "https://github.com/sidhinath/Bol_Bindaas_project#readme",
   "bugs": {
     "url": "https://github.com/sidhinath/Bol_Bindaas_project/issues"
+  },
+  "dependencies": {
+    "@capacitor/core": "^8.6.3"
+  },
+  "devDependencies": {
+    "@capacitor/android": "^8.6.3",
+    "@capacitor/cli": "^8.6.3"
   }
 }

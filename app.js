@@ -1,7 +1,23 @@
 /* BolBindaas — frontend logic.
    The AI key never appears here: all conversions go through /api/convert. */
 
-const API_ENDPOINT = "/api/convert";
+const LOCAL_API_ENDPOINT = "/api/convert";
+const DEPLOYED_API_ENDPOINT = "https://bol-bindaas-project.onrender.com/api/convert";
+
+// Capacitor's Android WebView may use a custom scheme, a file URL, or expose
+// the native bridge as window.Capacitor. In every native case, call Render.
+const isCapacitorRuntime =
+    typeof window !== "undefined" &&
+    (Boolean(window.Capacitor) ||
+        Boolean(
+            window.location &&
+                ["capacitor:", "file:"].includes(window.location.protocol)
+        ));
+
+const API_ENDPOINT = isCapacitorRuntime
+    ? DEPLOYED_API_ENDPOINT
+    : LOCAL_API_ENDPOINT;
+
 const MAX_CHARS = 4000;
 const DEFAULT_TONE = "direct";
 const PLACEHOLDER = "Your clean, natural English will appear here.";

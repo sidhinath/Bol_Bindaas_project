@@ -1233,6 +1233,30 @@ class HandlerIntegrationTests(unittest.TestCase):
         self.assertRegex(headers.get("X-Response-Time-Ms"), r"^\d+$")
         self.assertRegex(headers.get("Server-Timing"), r"^app;dur=\d+$")
 
+    def test_convert_response_includes_cors_headers(self):
+        status, body, headers = self.send_request(
+            "/api/convert",
+            method="POST",
+            payload={"text": "test", "tone": "normal"},
+            with_headers=True,
+        )
+
+        self.assertEqual(status, 200)
+        self.assertEqual(headers.get("Access-Control-Allow-Origin"), "*")
+        self.assertEqual(headers.get("Access-Control-Allow-Methods"), "POST, OPTIONS")
+        self.assertEqual(headers.get("Access-Control-Allow-Headers"), "Content-Type")
+
+    def test_convert_options_preflight_returns_cors_headers(self):
+        status, body, headers = self.send_request(
+            "/api/convert", method="OPTIONS", with_headers=True
+        )
+
+        self.assertEqual(status, 204)
+        self.assertEqual(body, "")
+        self.assertEqual(headers.get("Access-Control-Allow-Origin"), "*")
+        self.assertEqual(headers.get("Access-Control-Allow-Methods"), "POST, OPTIONS")
+        self.assertEqual(headers.get("Access-Control-Allow-Headers"), "Content-Type")
+
     def test_convert_response_reports_the_provider_that_answered(self):
         status, body = self.send_request(
             "/api/convert",

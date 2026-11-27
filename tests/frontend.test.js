@@ -122,6 +122,13 @@ function loadApp(options = {}) {
     matchMedia: () => ({ matches: false }),
   };
 
+  if (options.protocol) {
+    window.location = { protocol: options.protocol };
+  }
+  if (options.capacitor) {
+    window.Capacitor = options.capacitor;
+  }
+
   if (options.speechRecognition) {
     window.SpeechRecognition = options.speechRecognition;
   }
@@ -260,6 +267,44 @@ test("successful conversion posts trimmed text and tone, then shows English", as
   assert.equal(elements.convertBtn.disabled, false);
   assert.equal(elements.providerBadge.hidden, false);
   assert.equal(elements.providerBadge.textContent, "Powered by Gemini");
+});
+
+test("Capacitor runtime posts to the deployed Render endpoint", async () => {
+  const { elements, fetchCalls } = loadApp({
+    capacitor: {},
+    response: () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ text: "Hello.", provider: "gemini" }),
+    }),
+  });
+  elements.inputText.value = "namaste";
+
+  await fire(elements.convertBtn, "click");
+
+  assert.equal(
+    fetchCalls[0].url,
+    "https://bol-bindaas-project.onrender.com/api/convert"
+  );
+});
+
+test("file protocol also posts to the deployed Render endpoint", async () => {
+  const { elements, fetchCalls } = loadApp({
+    protocol: "file:",
+    response: () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ text: "Hello.", provider: "gemini" }),
+    }),
+  });
+  elements.inputText.value = "namaste";
+
+  await fire(elements.convertBtn, "click");
+
+  assert.equal(
+    fetchCalls[0].url,
+    "https://bol-bindaas-project.onrender.com/api/convert"
+  );
 });
 
 test("selected provider is sent and the responding provider is shown", async () => {

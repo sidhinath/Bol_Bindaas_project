@@ -18,8 +18,15 @@ test("every element requested by app.js exists in index.html", () => {
   }
 });
 
-test("conversion requests go to the server route, not directly to an AI provider", () => {
-  assert.match(app, /const API_ENDPOINT\s*=\s*"\/api\/convert"/);
+test("conversion requests go through the app server, locally or from Capacitor", () => {
+  assert.match(app, /const LOCAL_API_ENDPOINT\s*=\s*"\/api\/convert"/);
+  assert.match(
+    app,
+    /const DEPLOYED_API_ENDPOINT\s*=\s*"https:\/\/bol-bindaas-project\.onrender\.com\/api\/convert"/
+  );
+  assert.match(app, /window\.Capacitor/);
+  assert.match(app, /capacitor:/);
+  assert.match(app, /file:/);
   assert.doesNotMatch(app, /generativelanguage|api\.openai|Authorization|Bearer/);
 });
 
