@@ -252,9 +252,7 @@ async function convertToEnglish(stream) {
             return;
         }
 
-        // Fallback for unknown response format.
-        throw new Error("Unsupported request mode.");
-    } catch (error) {
+        } catch (error) {
         const message = error instanceof TypeError
             ? "Cannot reach the app server. Is server.py running?"
             : error.message;
