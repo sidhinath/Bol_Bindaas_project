@@ -35,7 +35,7 @@ DEFAULT_MODEL = "gemini-3.5-flash-lite"
 DEFAULT_FALLBACK_MODEL = "gemini-3.1-flash-lite"
 # Legacy Flash tiers are much slower for this translation-style workload.
 LEGACY_MODELS = {"gemini-3.8-flash", "gemini-3.6-flash"}
-MAX_OUTPUT_TOKENS = 1024
+MAX_OUTPUT_TOKENS = 300
 DEFAULT_TIMEOUT_SECONDS = 30
 DEFAULT_MAX_ATTEMPTS = 3
 RETRY_BASE_DELAY_SECONDS = 1
@@ -872,24 +872,7 @@ class AppHandler(SimpleHTTPRequestHandler):
     def do_GET(self):
         path = self.path.split("?", 1)[0]
         if path == "/api/health":
-            selection = CONFIG.get("provider", PROVIDER_AUTO)
-            self.send_json(
-                200,
-                {
-                    "status": "ok",
-                    "configured": bool(configured_providers()),
-                    "provider": (
-                        selection
-                        if selection != PROVIDER_AUTO
-                        else PROVIDER_GROQ
-                    ),
-                    "provider_selection": selection,
-                    "providers": configured_providers(),
-                    "model": CONFIG["model"],
-                    "fallback_model": CONFIG.get("fallback_model") or None,
-                    "attempts": MAX_ATTEMPTS,
-                },
-            )
+            self.send_json(200, {"status": "ok"})
             return
         super().do_GET()
 

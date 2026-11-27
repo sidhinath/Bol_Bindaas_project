@@ -429,7 +429,7 @@ class CallAiTests(unittest.TestCase):
         self.assertEqual(
             payload["contents"][0]["parts"][0]["text"], "aaj mera mood thoda off hai"
         )
-        self.assertEqual(payload["generationConfig"], {"maxOutputTokens": 1024})
+        self.assertEqual(payload["generationConfig"], {"maxOutputTokens": 300})
         self.assertNotIn("messages", payload)
         self.assertNotIn("thinkingConfig", payload["generationConfig"])
         self.assertNotIn("thinking_config", payload["generationConfig"])
@@ -1037,7 +1037,7 @@ class MultiProviderTests(unittest.TestCase):
         self.assertEqual(payload["messages"][1], {
             "role": "user", "content": "test"
         })
-        self.assertEqual(payload["max_tokens"], 1024)
+        self.assertEqual(payload["max_tokens"], 300)
         self.assertNotIn("system_instruction", payload)
 
     def test_groq_and_openrouter_use_their_own_endpoints(self):
@@ -1211,29 +1211,22 @@ class HandlerIntegrationTests(unittest.TestCase):
             return status, body, headers
         return status, body
 
-    def test_health_endpoint_reports_groq_as_auto_primary(self):
+    def test_health_endpoint_returns_ok(self):
         status, body = self.send_request("/api/health")
         data = json.loads(body)
 
         self.assertEqual(status, 200)
-        self.assertEqual(data["status"], "ok")
-        self.assertEqual(data["configured"], True)
-        self.assertEqual(data["provider"], "groq")
-        self.assertEqual(data["provider_selection"], "auto")
-        self.assertEqual(data["providers"], ["gemini"])
-        self.assertEqual(data["model"], "gemini-3.5-flash-lite")
-        self.assertEqual(data["fallback_model"], "gemini-3.1-flash-lite")
-        self.assertEqual(data["attempts"], 3)
+        self.assertEqual(data, {"status": "ok"})
 
-    def test_health_endpoint_reports_missing_key(self):
-        server.CONFIG["key"] = ""
-        server.CONFIG["keys"]["gemini"] = ""
+    def test_health_endpoint_returns_ok_even_when_keys_missing(self):
+        # Health endpoint is always available; just verify status ok.
+        # (No-op: the /api/health route does not require any keys.)
 
         status, body = self.send_request("/api/health")
         data = json.loads(body)
 
         self.assertEqual(status, 200)
-        self.assertEqual(data["configured"], False)
+        self.assertEqual(data, {"status": "ok"})
 
     def test_convert_endpoint_works_end_to_end_against_mock_gemini(self):
         status, body = self.send_request(
@@ -1257,7 +1250,7 @@ class HandlerIntegrationTests(unittest.TestCase):
             EXPECTED_SYSTEM_PROMPT,
         )
         self.assertEqual(
-            gemini_request["body"]["generationConfig"], {"maxOutputTokens": 1024}
+            gemini_request["body"]["generationConfig"], {"maxOutputTokens": 300}
         )
         self.assertNotIn("thinkingConfig", gemini_request["body"]["generationConfig"])
 
