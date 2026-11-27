@@ -1,207 +1,160 @@
-# BolBindaas - Bol bindaas, English hum sambhal lenge.
+# BolBindaas — Say it in Hinglish. Write it in English.
 
-## Live deployment
+BolBindaas turns Hinglish thoughts into clean, natural English. Type or speak in Roman Hindi, choose a tone, and get a polished English version that keeps the original meaning and emotion.
 
-🔗 https://bol-bindaas-project.onrender.com
+**Live demo:** https://bol-bindaas-project.onrender.com  
+**Health check:** https://bol-bindaas-project.onrender.com/api/health
 
-Health check: https://bol-bindaas-project.onrender.com/api/health
+## Project Overview
 
-## About
+BolBindaas is a focused, single-purpose writing workspace: no accounts, no dashboards, no clutter. The browser sends each conversion to a small Python server, which holds the AI keys and calls the configured providers. The page itself is self-contained, responsive, and framework-free.
 
-BolBindaas converts Hinglish (Hindi in Roman English) into clean, natural English. Type or speak your thought, choose a tone, and get an English version that keeps the original meaning and emotion.
+The app is designed to feel quick and calm: a centered workspace, two clear panes, one prominent **Convert to English** action, and simple Copy / Listen / Clear controls after every result.
 
-## Features
+## Key UI & Feature Highlights
 
-- Hinglish text input with character count
-- Voice input via Web Speech API (`hi-IN`)
-- AI conversion through a server-side API call
-- Gemini + Groq fallback: Gemini is primary; Groq takes over automatically on rate limits, high demand, timeouts, or network errors
-- Automatic retries with exponential backoff; OpenAI and OpenRouter are available as optional extra backups
-- Provider selection dropdown: Auto (recommended), Gemini, Groq, OpenAI, OpenRouter
-- Response badge shows “Powered by Gemini” or “Powered by Groq” so you know who answered
-- Quick tone pills: Casual, Professional, Polite, Direct (default), Empathetic
-- Unified split-pane editor with 1px divider, live character count, voice input, and per-pane clear controls
-- Loading skeleton and “Powered by …” attribution in the output pane
-- Copy output to clipboard
-- Listen to output with text-to-speech (`en-US`)
-- Clear / New reset
-- Loading feedback with elapsed time, empty-input, offline, and API error handling
-- Responsive UI with light/dark theme
+- **Modern responsive split-pane editor:** On desktop, the input and output panes sit side by side with a subtle divider. On screens `≤820px`, they stack into a mobile flow: **Your thought → Speak → Convert to English → English version → Copy / Listen / Clear / New**.
+- **One-click tone pills:** Casual, Professional, Polite, **Direct** (default), and Empathetic. The active pill uses the same indigo-to-violet gradient as the primary button.
+- **Dark / Light theme toggle:** A header button switches themes and remembers the choice in `localStorage`.
+- **Voice input and playback:** **Speak** uses the Web Speech API with Hindi (`hi-IN`) recognition; **Listen** reads the English result with SpeechSynthesis (`en-US`). Unsupported browsers get a clear fallback message.
+- **Multi-provider AI support:** In Auto mode, Gemini runs first; Groq takes over on rate limits, high demand, timeouts, or network errors. Optional OpenAI and OpenRouter keys add further backups. A header dropdown also allows a fixed `auto`, `gemini`, `openai`, `groq`, or `openrouter` choice.
+- **Focused conversion workflow:** 4,000-character input with a live counter, loading skeleton, elapsed-time feedback, empty/offline/API error handling, and keyboard shortcut `Ctrl/Cmd + Enter`.
+- **Clean output actions:** Copy to clipboard, listen to the result, or reset both panes with **Clear / New**. The API still returns the responding provider; the legacy `#providerBadge` element is kept in the DOM for `app.js` but visually hidden with CSS so the output header stays clean.
 
-## How it works
-
-1. User types or speaks in Hinglish, picks a tone pill and provider, then converts.
-2. Browser sends `POST /api/convert` with the text, tone, and provider choice.
-3. `server.py` tries Gemini first. On 429, 503, timeout, or network error it switches to Groq (then any optional extra backups).
-4. The response returns `{ "text": "...", "provider": "gemini" }`; the UI shows the English output and a “Powered by Gemini” / “Powered by Groq” badge.
-5. Copy, Listen, and Clear actions work the same regardless of provider.
-
-## Interface
-
-The app is a focused AI writing workspace with a compact header and a wide (up to 1180px) split-pane editor. The left pane holds the Hinglish textarea, tone pills, live `0 / 4000` counter, Speak button, and a quick Clear icon. The right pane shows the English output, a subtle loading skeleton while generating, the provider badge, and Copy / Listen / Clear / New actions. Input and output text use Inter at 18px with relaxed line height; labels and buttons stay at 14px or larger. On mobile the panes stack with a horizontal divider. Light and dark themes use the same deep-slate/indigo visual language.
-
-## Tech stack
+## Tech Stack & Architecture
 
 | Layer | Used |
 | --- | --- |
-| Frontend | HTML5, CSS3, vanilla JavaScript |
-| Browser APIs | Web Speech API, SpeechSynthesis, Clipboard API, localStorage |
-| Backend | Python 3 standard library (`http.server`, `urllib.request`) |
-| AI | Gemini `generateContent` primary + Groq fallback; OpenAI/OpenRouter optional. Gemini → Groq Auto chain, 3 attempts, exponential backoff |
-| Dependencies | None |
-| Testing | Python `unittest` + Node built-in test runner |
-
-## Project structure
+| Frontend | One self-contained `index.html` with embedded CSS, Flexbox/Grid layout, and vanilla JavaScript in `app.js` |
+| UI style | Inter-first system font stack; dark/light theme tokens; no external fonts, icons, or CSS files |
+| Browser APIs | Web Speech API, SpeechSynthesis, Clipboard API, `localStorage` |
+| Backend | `server.py` — Python 3 standard library only (`http.server`, `urllib.request`, `json`, `os`) |
+| Dependencies | None on either side; no frontend framework, bundler, SDK, or Python package install needed |
+| Testing | Python `unittest` and the Node.js built-in test runner |
 
 ```text
-Bol_Bindaas_project/
-├── index.html        # UI markup
-├── style.css         # Styling and themes
-├── app.js            # Frontend logic
-├── server.py         # Static server and /api/convert
-├── .env.example      # Environment variable template
-├── package.json      # Project metadata and npm scripts
-├── requirements.txt  # No third-party packages
-├── tests/            # Automated backend and frontend tests
-└── .gitignore        # Ignores .env and caches
+Browser (index.html + app.js)
+  │
+  │  POST /api/convert  { "text": "...", "tone": "direct", "provider": "auto" }
+  ▼
+server.py
+  • serves the static page
+  • validates input and tone
+  • reads API keys from .env or the real environment
+  • keeps every key server-side
+  ▼
+Gemini  →  Groq  →  OpenAI  →  OpenRouter
+(primary)  (automatic fallback)  (optional backups)
+  ▼
+{ "text": "Clean natural English", "provider": "gemini" }
 ```
 
-## Prerequisites
+`GET /api/health` reports status, provider selection, configured providers, and model settings. All active styling lives in `index.html`; `style.css` remains in the repository only as an unused legacy file.
+
+## Setup & Running Locally
+
+### 1. Prerequisites
 
 - Python 3.10+
-- Node.js 18+ (optional, for `npm start`)
+- A Gemini API key: https://aistudio.google.com/apikey
+- Optional keys for Groq, OpenAI, and OpenRouter
 - Chrome recommended for voice input
-- Gemini API key (https://aistudio.google.com/apikey) and optionally a Groq key (https://console.groq.com/keys) for fallback
-- Internet access
+- Node.js 18+ only if you want the `npm` scripts or tests
 
-## Setup
+### 2. Get the code
 
 ```bash
 git clone https://github.com/sidhinath/Bol_Bindaas_project.git
 cd Bol_Bindaas_project
+```
+
+Create your local environment file:
+
+```bash
 cp .env.example .env
 ```
 
-Windows PowerShell:
+On Windows PowerShell:
 
 ```powershell
 Copy-Item .env.example .env
 ```
 
-Add your keys to `.env`:
+### 3. Add keys to `.env`
+
+At minimum, set the primary Gemini key:
 
 ```env
-# auto | gemini | groq | openai | openrouter
 AI_PROVIDER=auto
-
-# Primary provider (AI_API_KEY / GOOGLE_API_KEY also work)
-GEMINI_API_KEY=AIza-your-gemini-key-here
-
-# Fallback on 429 / 503 / timeout / network error
-GROQ_API_KEY=gsk_your-groq-key-here
-
-AI_MODEL=gemini-3.5-flash-lite
-# GROQ_MODEL=llama-3.1-8b-instant
-# AI_FALLBACK_MODEL=gemini-3.1-flash-lite  # lighter Gemini backup
-# AI_MAX_ATTEMPTS=3                        # per provider, 1-5
-# AI_TIMEOUT_SECONDS=30                    # 5-120
+GEMINI_API_KEY=your-gemini-key-here
 ```
 
-Gemini alone works; add `GROQ_API_KEY` to enable automatic fallback. OpenAI and OpenRouter keys are optional extra backups:
+Recommended fallback:
 
 ```env
-# OPENAI_API_KEY=sk-your-openai-key-here     # https://platform.openai.com/api-keys
-# OPENROUTER_API_KEY=sk-or-your-key-here     # https://openrouter.ai/keys
+GROQ_API_KEY=your-groq-key-here
 ```
 
-Optional per-provider overrides: `GROQ_MODEL` (default `llama-3.1-8b-instant`), `OPENAI_MODEL` (default `gpt-4o-mini`), `OPENROUTER_MODEL` (default `openai/gpt-4o-mini`), plus matching `<PROVIDER>_BASE_URL` values. See `.env.example` for the full template.
+Optional extra backups:
 
-## Multi-provider architecture
-
-The deployed app is available at https://bol-bindaas-project.onrender.com. The browser never talks to an AI vendor directly: it sends one request to `server.py`, and the server holds all API keys.
-
-```text
-Browser
-  │  POST /api/convert  { "text": "...", "tone": "direct", "provider": "auto" }
-  ▼
-server.py — server-side key loading and request validation
-  │
-  ├─ 1. Gemini generateContent ................ PRIMARY
-  │      └─ 429 / 503 / timeout / network error ──┐
-  ├─ 2. Groq chat/completions ......... AUTOMATIC FALLBACK ◄┘
-  ├─ 3. OpenAI chat/completions ......... optional backup
-  └─ 4. OpenRouter chat/completions ..... optional backup
-  ▼
-{ "text": "English translation", "provider": "gemini" }
+```env
+OPENAI_API_KEY=your-openai-key-here
+OPENROUTER_API_KEY=your-openrouter-key-here
 ```
 
-### Provider roles
+`server.py` reads `.env` directly with the standard library; no `python-dotenv` install is needed. Real environment variables take precedence over `.env` values. See `.env.example` for optional model, base URL, retry, timeout, and host/port settings.
 
-| Provider | Role | Default model | API key |
-| --- | --- | --- | --- |
-| Gemini | Primary; always tried first in Auto mode | `gemini-3.5-flash-lite` | `GEMINI_API_KEY` |
-| Groq | Automatic fallback for temporary Gemini failures | `llama-3.1-8b-instant` | `GROQ_API_KEY` |
-| OpenAI | Optional extra backup | `gpt-4o-mini` | `OPENAI_API_KEY` |
-| OpenRouter | Optional extra backup | `openai/gpt-4o-mini` | `OPENROUTER_API_KEY` |
-
-### Environment variables
-
-| Variable | Purpose |
-| --- | --- |
-| `AI_PROVIDER` | `auto` (recommended) or a fixed `gemini` / `groq` / `openai` / `openrouter` choice. |
-| `GEMINI_API_KEY` | Primary Gemini key. Legacy `AI_API_KEY` and `GOOGLE_API_KEY` are still accepted. |
-| `GROQ_API_KEY` | Enables the automatic Groq fallback. Without it, Auto mode retries Gemini instead. |
-| `OPENAI_API_KEY`, `OPENROUTER_API_KEY` | Optional extra backups after Groq. |
-| `AI_MODEL`, `AI_FALLBACK_MODEL` | Gemini primary and lighter overload model (`gemini-3.1-flash-lite`). |
-| `GROQ_MODEL`, `OPENAI_MODEL`, `OPENROUTER_MODEL` | Optional model overrides for the OpenAI-compatible providers. |
-| `GROQ_BASE_URL`, `OPENAI_BASE_URL`, `OPENROUTER_BASE_URL`, `AI_BASE_URL` | Optional endpoint overrides; defaults are preconfigured. |
-| `AI_MAX_ATTEMPTS`, `AI_TIMEOUT_SECONDS` | Per-provider retry budget and request timeout (defaults `3`, `30`). |
-| `AI_DEBUG` | Set `1` to append raw provider details to browser error responses; server logs are always verbose. |
-| `HOST`, `PORT` | Local/platform binding; Render supplies these in production. |
-
-Copy `.env.example` to `.env` (see **Setup** above), add at least `GEMINI_API_KEY`, and add `GROQ_API_KEY` to enable fallback. The UI provider dropdown sends a per-request `provider` override with the same five choices as `AI_PROVIDER`.
-
-### Error handling and fallback behavior
-
-- Invalid JSON, an unknown tone, or empty/oversized text returns **400** before any provider is called. A missing key returns **503** with the required environment variable named.
-- In Auto mode, a temporary Gemini failure — **429**, **503**, timeout, or network error — switches immediately to Groq when `GROQ_API_KEY` is configured, then to any later backup with a key.
-- Other provider errors are not silently hidden: they return a clear, user-friendly message instead of cascading through providers.
-- If no later provider is configured, the current provider retries up to `AI_MAX_ATTEMPTS` with exponential backoff; Gemini also tries the lighter `AI_FALLBACK_MODEL` on overload.
-- If every configured provider fails, the last friendly error is returned as **503**. Unexpected server faults are logged and returned as **500**.
-- Every successful response includes `{ "text": "...", "provider": "..." }`, so the UI can show “Powered by Gemini” or “Powered by Groq” even when a fallback answered.
-- `GET /api/health` reports `provider_selection` and the configured `providers` list. Logs record the provider chain, attempts, switches, token usage, and elapsed time.
-
-### Performance notes
-
-- Gemini starts on the fast `gemini-3.5-flash-lite` tier; slow legacy pinned values are upgraded automatically unless `AI_ALLOW_LEGACY_MODEL=1`.
-- All providers receive the same compact translation prompt and a 1024-token output cap, so switching providers preserves meaning, tone handling, and plain-text output format.
-- API calls use only Python's standard-library `urllib.request` — no SDKs or third-party Python packages to install.
-- Immediate switching on temporary failures avoids waiting through a full Gemini retry cycle when Groq is available.
-- `/api/convert` logs total and provider time in milliseconds and returns `Server-Timing` / `X-Response-Time-Ms` headers; the UI shows elapsed time and a loading skeleton while waiting.
-
-## Run locally
+### 4. Start the server
 
 ```bash
 python server.py
 ```
 
-Or:
+Or, if you have Node.js installed:
 
 ```bash
 npm start
 ```
 
-Open **http://127.0.0.1:5500/**. Health check: **/api/health**.
+Open **http://127.0.0.1:5500/**. Check **http://127.0.0.1:5500/api/health**. Press `Ctrl + C` in the terminal to stop the server.
+
+## API
+
+**Request**
+
+```http
+POST /api/convert
+Content-Type: application/json
+```
+
+```json
+{
+  "text": "aaj mera mood thoda off hai",
+  "tone": "direct",
+  "provider": "auto"
+}
+```
+
+**Response**
+
+```json
+{
+  "text": "Today I am feeling a little low.",
+  "provider": "gemini"
+}
+```
+
+Tones are `casual`, `professional`, `polite`, `direct`, and `empathetic`. Providers are `auto`, `gemini`, `openai`, `groq`, and `openrouter`. Invalid JSON, empty or oversized text, and unknown tones are rejected before any provider is called.
 
 ## Testing
 
-The test suite uses only built-in tools, so there is nothing extra to install.
+The suite uses only built-in tools.
 
 ```bash
 npm test
 ```
 
-Run either part on its own:
+Run either part separately:
 
 ```bash
 npm run test:backend
@@ -214,43 +167,36 @@ Generate coverage reports:
 npm run test:coverage
 ```
 
-Node prints frontend coverage to the terminal. Python writes a line-coverage report for `server.py` to `.coverage/server.py.cover`.
-
-The backend tests mock Gemini and the OpenAI-compatible endpoints locally, so retries, provider switches, fallback, and overload responses are covered without any API key. Render logs include the provider chain, selected model, payload size, response status, elapsed time, token usage, and every retry or provider switch.
-
-## Performance
-
-The **Performance notes** in the multi-provider architecture section cover the fast Gemini tier, compact shared prompt, immediate Groq fallback, standard-library HTTP calls, timing headers, and loading feedback. Together these keep responses quick without changing output quality or format.
+Backend tests mock the provider endpoints locally, so fallback and retry behavior is covered without real API keys.
 
 ## Deployment
 
-Deploy as a Python web service on Render:
+Deploy as a Python web service with:
 
-- Repository: https://github.com/sidhinath/Bol_Bindaas_project
-- Build command: `pip install -r requirements.txt`
-- Start command: `python server.py`
-- Health check: `/api/health`
-- Environment variables:
-  - Provider selection: `AI_PROVIDER` (default `auto`; `gemini`, `groq`, `openai`, `openrouter` for a fixed provider)
-  - Keys: `GEMINI_API_KEY` (or legacy `AI_API_KEY`/`GOOGLE_API_KEY`) and `GROQ_API_KEY` for fallback; `OPENAI_API_KEY` / `OPENROUTER_API_KEY` are optional extras
-  - Gemini tuning: `AI_MODEL` (default `gemini-3.5-flash-lite`; older `gemini-3.8-flash`/`3.6-flash` values are auto-upgraded), `AI_ALLOW_LEGACY_MODEL=1` to keep them, `AI_FALLBACK_MODEL` (default `gemini-3.1-flash-lite`)
-  - Optional overrides: `OPENAI_MODEL`, `GROQ_MODEL`, `OPENROUTER_MODEL`, `OPENAI_BASE_URL`, `GROQ_BASE_URL`, `OPENROUTER_BASE_URL`, `AI_BASE_URL`
-  - Reliability: `AI_MAX_ATTEMPTS` (default `3`), `AI_TIMEOUT_SECONDS` (default `30`), `AI_DEBUG` (set `1` to include raw provider details in browser responses)
-  - Platform: `HOST=0.0.0.0`, `PORT` (set by Render)
+- **Build command:** `pip install -r requirements.txt` (no third-party packages)
+- **Start command:** `python server.py`
+- **Health check:** `/api/health`
+- **Environment:** set `HOST`, `PORT`, `AI_PROVIDER`, and the provider keys described above
 
-## Usage examples
+## Project Structure
 
-| Hinglish input | Tone | English output |
-| --- | --- | --- |
-| `aaj mera mood thoda off hai` | Direct | Today I am feeling a little low. |
-| `sir, main report aaj shaam tak bhej dunga` | Polite | Sir, I will send the report by this evening. |
-| `yaar plan cancel ho gaya` | Casual | The plan got cancelled, man. |
+```text
+Bol_Bindaas_project/
+├── index.html        # Self-contained UI markup and inline CSS
+├── app.js            # Vanilla JS: tones, theme, voice, conversion, output actions
+├── server.py         # Static server, /api/health, /api/convert, provider fallback
+├── .env.example      # Environment variable template
+├── package.json      # npm scripts for running and testing
+├── requirements.txt  # Empty: standard library only
+├── tests/            # Python unittest + Node test runner suites
+└── .gitignore        # Ignores .env, caches, and coverage output
+```
 
 ## Limitations
 
-- Voice input works best in Chrome.
-- Accuracy depends on browser speech recognition and the AI model.
-- AI conversion needs an API key and internet access.
+- Voice input depends on browser speech recognition and works best in Chrome.
+- AI conversion needs an API key and an internet connection.
+- Output quality follows the selected provider and model.
 
 ## Author
 
